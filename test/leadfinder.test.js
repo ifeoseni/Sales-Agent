@@ -24,8 +24,8 @@ globalThis.fetch = async (url) => {
   return json({}, 404);
 };
 
-const { findLeads, leadsFromUrls } = await import('../lib/leadfinder.js');
-const { listLeads } = await import('../lib/leads.js');
+const { findLeads, leadsFromUrls, enrichLeadOnline } = await import('../lib/leadfinder.js');
+const { listLeads, addLead } = await import('../lib/leads.js');
 
 test('saves a map listing even when it publishes no email or phone', async () => {
   const progress = [];
@@ -48,6 +48,17 @@ test('leadsFromUrls directly converts social profile URLs into leads without gen
   assert.equal(r.leads[0].source, 'social-import');
   assert.equal(r.leads[0].socials.instagram, 'https://instagram.com/lagos_parties');
   assert.ok(r.leads[0].tags.includes('social-lead'));
+});
+
+test('enrichLeadOnline preserves credits and skips when contacts already exist', async () => {
+  const { lead: existing } = addLead({
+    name: 'Existing Center',
+    phones: ['+2348012345678'],
+    emails: ['hello@existing.ng'],
+  });
+  const res = await enrichLeadOnline(existing.id, { force: false });
+  assert.equal(res.skipped, true);
+  assert.match(res.reason, /already has contact/i);
 });
 
 test('restores the real fetch', () => {

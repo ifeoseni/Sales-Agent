@@ -26,7 +26,7 @@ const { getProducts, setProducts } = await import('./lib/products.js');
 const { chat, ollamaModels, PROVIDERS } = await import('./lib/llm.js');
 const { reply, resetConversation, draftOutreach, matchProduct, flushConversations } = await import('./lib/agent.js');
 const L = await import('./lib/leads.js');
-const { findLeads, enrichLead, leadsFromUrls } = await import('./lib/leadfinder.js');
+const { findLeads, enrichLead, enrichLeadOnline, leadsFromUrls } = await import('./lib/leadfinder.js');
 const { geoapifyTest } = await import('./lib/geoapify.js');
 const { startTelegram, stopTelegram, testChannel } = await import('./lib/telegram.js');
 const { allow, blocked, record, clear, underDailyCap } = await import('./lib/ratelimit.js');
@@ -305,6 +305,18 @@ async function api(req, res, url) {
   if (p === '/api/leads/bulk' && m === 'POST') {
     const b = await readJson(req, 100_000);
     if (!Array.isArray(b.ids) || !b.ids.length) return json(res, 400, { error: 'Select at least one lead' });
+    if (b.action === 'hunt') {
+      const results = [];
+      for (const id of b.ids.slice(0, 50)) {
+        try {
+          const r = await enrichLeadOnline(id, { force: !!b.force });
+          results.push({ id, ...r });
+        } catch (e) {
+          results.push({ id, error: e.message });
+        }
+      }
+      return json(res, 200, { results, updated: results.filter((r) => r.updated).length });
+    }
     const actions = ['status', 'priority', 'owner', 'value', 'tag', 'task', 'delete'];
     if (!actions.includes(b.action)) return json(res, 400, { error: 'Unknown bulk action' });
     if (b.action === 'status' && !L.STATUSES.includes(b.status)) return json(res, 400, { error: 'Unknown stage' });
@@ -375,7 +387,7 @@ async function api(req, res, url) {
     return target ? json(res, 200, target) : json(res, 404, { error: 'One of the leads was not found' });
   }
 
-  const leadM = p.match(/^\/api\/leads\/(\w+)(?:\/(draft|enrich))?$/);
+  const leadM = p.match(/^\/api\/leads\/(\w+)(?:\/(draft|enrich|hunt))?$/);
   if (leadM) {
     const [, id, action] = leadM;
     const lead = L.getLead(id);
@@ -384,6 +396,9 @@ async function api(req, res, url) {
     if (!action && m === 'DELETE') return json(res, 200, { ok: L.removeLead(id) });
     if (action === 'enrich' && m === 'POST') {
       try { return json(res, 200, await enrichLead(lead)); } catch (e) { return json(res, 502, { error: e.message }); }
+    }
+    if (action === 'hunt' && m === 'POST') {
+      try { return json(res, 200, await enrichLeadOnline(id, { force: true })); } catch (e) { return json(res, 502, { error: e.message }); }
     }
     if (action === 'draft' && m === 'POST') {
       if (lead.status === 'do-not-contact') return json(res, 400, { error: 'This lead is marked do-not-contact' });

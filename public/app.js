@@ -463,22 +463,26 @@ function contactMini(l) {
   const e = l.emails?.[0];
   const p = l.phones?.[0];
   const wa = p ? p.replace(/\D/g, '') : null;
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.name + ' ' + (l.address || l.location || ''))}`;
+  const srcUrl = l.sourceUrl || (l.address ? mapUrl : `https://www.google.com/search?q=${encodeURIComponent(l.name + ' ' + (l.location || ''))}`);
   return `<div class="contact-mini">
     ${e ? `<a href="mailto:${esc(e)}">${esc(e)}</a>` : ''}
     ${p ? `<span class="contact-phone"><a href="tel:${esc(p)}">${esc(p)}</a>${wa ? ` <a href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-left:5px;color:#25d366" title="Chat on WhatsApp" aria-label="WhatsApp with ${esc(l.name)}"><svg class="ico" style="width:13px;height:13px;vertical-align:-1px"><use href="#i-phone"/></svg></a>` : ''}</span>` : ''}
-    ${l.website ? `<a href="${safeHref(l.website)}" target="_blank" rel="noopener noreferrer">${esc(domainOf(l.website))}</a>` : ''}
-    ${!e && !p && !l.website ? '<span class="none">No contact yet</span>' : ''}
+    ${l.website ? `<a href="${safeHref(l.website)}" target="_blank" rel="noopener noreferrer" title="${esc(l.website)}">${esc(domainOf(l.website) || l.website)}</a>` : ''}
+    ${!l.website ? `<a href="${safeHref(srcUrl)}" target="_blank" rel="noopener noreferrer" class="muted small" style="display:inline-flex;align-items:center;gap:3px" title="View online source / map"><svg class="ico" style="width:11px;height:11px"><use href="#i-globe"/></svg> ${esc(l.address ? 'View on Maps' : 'Source')}</a>` : ''}
+    ${!e && !p ? `<div style="display:flex;gap:5px;align-items:center;margin-top:2px"><button class="btn ghost sm" data-quick-hunt="${esc(l.id)}" title="Find contacts online with AI Agent" style="padding:2px 7px;font-size:11px;gap:4px;height:auto"><svg class="ico" style="width:11px;height:11px"><use href="#i-search"/></svg> Find online</button></div>` : ''}
   </div>`;
 }
 function leadRow(l, bulk = true) {
   const tags = (l.tags || []).slice(0, 4).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
   const nf = nextFollowUp(l);
   const wa = l.phones?.[0] ? l.phones[0].replace(/\D/g, '') : null;
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.name + ' ' + (l.address || l.location || ''))}`;
   return `<tr data-id="${esc(l.id)}" class="${selected.has(l.id) ? 'selected' : ''}">
     ${bulk ? `<td class="cell-check"><input type="checkbox" data-check value="${esc(l.id)}" ${selected.has(l.id) ? 'checked' : ''} aria-label="Select ${esc(l.name)}"></td>` : ''}
     <td class="row-business">
       <span class="lead-name">${esc(l.name)}</span>
-      <span class="lead-sub"><i class="priority-dot ${esc(l.priority || 'normal')}" title="${esc(priorityLabel(l.priority))} priority"></i>${esc([l.industry, l.location].filter(Boolean).join(' · ') || 'No industry or location')}${l.source && l.source !== 'manual' ? ` <span class="chip">${esc(l.source.split(':')[0])}</span>` : ''}</span>
+      <span class="lead-sub"><i class="priority-dot ${esc(l.priority || 'normal')}" title="${esc(priorityLabel(l.priority))} priority"></i>${esc([l.industry, l.location].filter(Boolean).join(' · ') || 'No industry or location')}${l.address ? ` · <a href="${safeHref(mapUrl)}" target="_blank" rel="noopener noreferrer" class="muted small" title="View address on Google Maps">📍 ${esc(l.address)}</a>` : ''}${l.source && l.source !== 'manual' ? ` <span class="chip">${esc(l.source.split(':')[0])}</span>` : ''}</span>
       ${tags ? `<div class="lead-tags">${tags}</div>` : ''}
     </td>
     <td class="row-stage">${stageSelect(l)}</td>
@@ -618,6 +622,11 @@ function onLeadTableClick(e) {
   const row = e.target.closest('tr[data-id]');
   if (!row) return;
   const id = row.dataset.id;
+  const huntBtn = e.target.closest('[data-quick-hunt]');
+  if (huntBtn) {
+    huntLead(id);
+    return;
+  }
   if (e.target.closest('[data-act="open"]')) return openLead(id);
   if (e.target.closest('[data-act="task"]')) return openLead(id, 'tasks');
   if (e.target.closest('input, select, button, a')) return;
@@ -683,6 +692,11 @@ $('#bulktaskgo').addEventListener('click', () => {
   if (!title) return $('#bulktask').focus();
   $('#bulktask').value = '';
   runBulk({ action: 'task', task: { title, due: addDaysKey(settings?.crm?.followUpDays || 3) } });
+});
+$('#bulkhunt')?.addEventListener('click', async () => {
+  if (!selected.size) return;
+  toast(`Online agent hunting contacts for ${selected.size} leads…`);
+  await runBulk({ action: 'hunt' });
 });
 $('#bulkdelete').addEventListener('click', () => {
   if (!selected.size || !confirm(`Delete ${selected.size} selected lead${selected.size === 1 ? '' : 's'}? This cannot be undone.`)) return;
@@ -911,17 +925,23 @@ function renderDrawer() {
 function overviewPane(lead) {
   const productOpts = products.map((p) => `<option value="${esc(p.id)}" ${p.id === lead.product ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   const socials = Object.entries(lead.socials || {}).map(([k, v]) => `<a href="${safeHref(v)}" target="_blank" rel="noopener noreferrer"><svg class="ico"><use href="#i-globe"/></svg> ${esc(k)}</a>`).join('');
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.name + ' ' + (lead.address || lead.location || ''))}`;
+  const srcUrl = lead.sourceUrl || (lead.address ? mapUrl : `https://www.google.com/search?q=${encodeURIComponent(lead.name + ' ' + (lead.location || ''))}`);
   return `<div class="drawer-pane">
     <div class="contact-lines">
       ${lead.emails?.length ? lead.emails.map((e) => `<a href="mailto:${esc(e)}"><svg class="ico"><use href="#i-mail"/></svg> ${esc(e)}</a>`).join('') : ''}
       ${lead.phones?.length ? lead.phones.map((p) => `<a href="tel:${esc(p)}"><svg class="ico"><use href="#i-phone"/></svg> ${esc(p)}</a>`).join('') : ''}
-      ${lead.website ? `<a href="${safeHref(lead.website)}" target="_blank" rel="noopener noreferrer"><svg class="ico"><use href="#i-globe"/></svg> ${esc(domainOf(lead.website))}</a>` : ''}
+      ${lead.website ? `<a href="${safeHref(lead.website)}" target="_blank" rel="noopener noreferrer" title="${esc(lead.website)}"><svg class="ico"><use href="#i-globe"/></svg> ${esc(domainOf(lead.website) || lead.website)}</a>` : ''}
+      ${lead.address ? `<a href="${safeHref(mapUrl)}" target="_blank" rel="noopener noreferrer" title="View address on Google Maps"><svg class="ico"><use href="#i-target"/></svg> ${esc(lead.address)}</a>` : ''}
       ${socials}
-      ${!lead.emails?.length && !lead.phones?.length ? '<span class="muted">No email or phone on file yet. Refresh the website to look again.</span>' : ''}
+      <a href="${safeHref(srcUrl)}" target="_blank" rel="noopener noreferrer" class="muted" title="View online source / search on Google"><svg class="ico"><use href="#i-search"/></svg> Source on Google</a>
+      ${!lead.emails?.length && !lead.phones?.length ? '<span class="muted">No direct email or phone on file yet. Click "Find contacts online" below.</span>' : ''}
     </div>
     <div class="field-grid">
       <div><label for="df-name">Business name</label><input id="df-name" data-field="name" value="${esc(lead.name)}"></div>
-      <div><label for="df-website">Website</label><input id="df-website" data-field="website" value="${esc(lead.website)}"></div>
+      <div><label for="df-website">Website</label><input id="df-website" data-field="website" value="${esc(lead.website)}" placeholder="https://…"></div>
+      <div><label for="df-address">Address</label><input id="df-address" data-field="address" value="${esc(lead.address)}" placeholder="Street address…"></div>
+      <div><label for="df-sourceurl">Source link</label><input id="df-sourceurl" data-field="sourceUrl" value="${esc(lead.sourceUrl || '')}" placeholder="https://…"></div>
       <div><label for="df-industry">Industry</label><input id="df-industry" data-field="industry" value="${esc(lead.industry)}"></div>
       <div><label for="df-location">Location</label><input id="df-location" data-field="location" value="${esc(lead.location)}"></div>
       <div><label for="df-value">Deal value</label><input id="df-value" data-field="value" type="number" min="0" step="1000" value="${Number(lead.value) || 0}"></div>
@@ -942,6 +962,7 @@ function overviewPane(lead) {
     </div>
     <div class="drawer-footer">
       <button class="btn" id="dsave"><svg class="ico"><use href="#i-check"/></svg> Save details</button>
+      <button class="btn ghost" id="dhunt"><svg class="ico"><use href="#i-search"/></svg> Find contacts online</button>
       <button class="btn ghost" id="drefresh"><svg class="ico"><use href="#i-refresh"/></svg> Refresh contacts</button>
       <button class="btn ghost" id="dmerge2"><svg class="ico"><use href="#i-merge"/></svg> Merge duplicate</button>
       <button class="btn danger" id="ddelete"><svg class="ico"><use href="#i-trash"/></svg> Delete</button>
@@ -1012,6 +1033,7 @@ function bindDrawer() {
   for (const b of $$('[data-dtab]')) b.addEventListener('click', () => { drawerTab = b.dataset.dtab; renderDrawer(); });
   on('[data-drawer-stage]', 'change', (e) => changeStage(id, e.target.value));
   on('#dsave', 'click', () => saveDrawer(id));
+  on('#dhunt', 'click', () => huntLead(id));
   on('#drefresh', 'click', () => enrichLead(id));
   on('#dmerge', 'click', () => openMerge(id));
   on('#dmerge2', 'click', () => openMerge(id));
@@ -1050,6 +1072,7 @@ async function saveDrawer(id) {
   const field = (name) => $(`[data-field="${name}"]`)?.value;
   const patch = {
     name: field('name'), website: field('website'), industry: field('industry'), location: field('location'),
+    address: field('address'), sourceUrl: field('sourceUrl'),
     value: field('value'), priority: field('priority'), owner: field('owner'), product: field('product'),
     tags: splitTags(field('tags')), notes: field('notes'), description: field('description'),
   };
@@ -1117,6 +1140,29 @@ async function addNote(id) {
     renderLeads();
     refreshDashboard();
   } catch (err) { toast(err.message, 'error'); }
+}
+async function huntLead(id) {
+  const btn = $('#dhunt');
+  if (btn) { btn.disabled = true; btn.textContent = 'Searching web…'; }
+  try {
+    toast('Online Agent is searching the web for contact info…');
+    const res = await api(`/leads/${id}/hunt`, 'POST', {});
+    if (res.lead) applyLead(res.lead);
+    if (res.updated) {
+      toast('Found new contact details online!');
+    } else {
+      toast(res.reason || 'No additional contact details found online');
+    }
+    renderDrawer();
+    renderLeads();
+    refreshDashboard();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="ico"><use href="#i-search"/></svg> Find contacts online';
+  }
 }
 async function enrichLead(id) {
   const btn = $('#drefresh');
