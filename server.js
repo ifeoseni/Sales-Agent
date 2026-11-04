@@ -24,11 +24,14 @@ try { process.loadEnvFile(path.join(ROOT, '.env')); } catch { /* no .env file */
 const { getSettings, publicSettings, updateSettings, verifyPassword, setPassword, issueToken, checkToken, passwordFromEnv } = await import('./lib/settings.js');
 const { getProducts, setProducts } = await import('./lib/products.js');
 const { chat, ollamaModels, PROVIDERS } = await import('./lib/llm.js');
-const { reply, resetConversation, draftOutreach, matchProduct, flushConversations } = await import('./lib/agent.js');
+const { reply, resetConversation, draftOutreach, draftIcebreaker, matchProduct, flushConversations } = await import('./lib/agent.js');
 const L = await import('./lib/leads.js');
 const { findLeads, enrichLead, enrichLeadOnline, leadsFromUrls } = await import('./lib/leadfinder.js');
 const { geoapifyTest } = await import('./lib/geoapify.js');
 const { startTelegram, stopTelegram, testChannel } = await import('./lib/telegram.js');
+const { verifyEmailMx } = await import('./lib/verify.js');
+const { testWebhook } = await import('./lib/webhook.js');
+const { getRates } = await import('./lib/currency.js');
 const { allow, blocked, record, clear, underDailyCap } = await import('./lib/ratelimit.js');
 
 const PORT = +process.env.PORT || 3000;
@@ -218,6 +221,19 @@ async function api(req, res, url) {
     }
   }
 
+  if (p === '/api/settings/test-webhook' && m === 'POST') {
+    const { url, secret } = await readJson(req, 5000);
+    try {
+      return json(res, 200, await testWebhook(url, secret));
+    } catch (e) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  if (p === '/api/rates' && m === 'GET') {
+    return json(res, 200, await getRates());
+  }
+
   if (p === '/api/stats' && m === 'GET') return json(res, 200, L.stats());
   if (p === '/api/dashboard' && m === 'GET') return json(res, 200, L.dashboard());
 
@@ -387,7 +403,7 @@ async function api(req, res, url) {
     return target ? json(res, 200, target) : json(res, 404, { error: 'One of the leads was not found' });
   }
 
-  const leadM = p.match(/^\/api\/leads\/(\w+)(?:\/(draft|enrich|hunt))?$/);
+  const leadM = p.match(/^\/api\/leads\/(\w+)(?:\/(draft|enrich|hunt|verify-email|icebreaker))?$/);
   if (leadM) {
     const [, id, action] = leadM;
     const lead = L.getLead(id);
@@ -399,6 +415,21 @@ async function api(req, res, url) {
     }
     if (action === 'hunt' && m === 'POST') {
       try { return json(res, 200, await enrichLeadOnline(id, { force: true })); } catch (e) { return json(res, 502, { error: e.message }); }
+    }
+    if (action === 'verify-email' && m === 'POST') {
+      const email = lead.emails?.[0];
+      if (!email) return json(res, 400, { error: 'This lead has no email on file to verify' });
+      const health = await verifyEmailMx(email);
+      const updated = L.updateLead(id, { emailHealth: health });
+      L.addActivity(id, { type: 'enrich', text: `Email MX verified: ${health.provider || health.status} (${health.reason || health.primaryMx || health.status})` });
+      return json(res, 200, { health, lead: updated });
+    }
+    if (action === 'icebreaker' && m === 'POST') {
+      const b = await readJson(req, 2000).catch(() => ({}));
+      try {
+        const out = await draftIcebreaker(lead, b.product || lead.product);
+        return json(res, 200, out);
+      } catch (e) { return json(res, 502, { error: e.message }); }
     }
     if (action === 'draft' && m === 'POST') {
       if (lead.status === 'do-not-contact') return json(res, 400, { error: 'This lead is marked do-not-contact' });

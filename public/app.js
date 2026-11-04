@@ -49,9 +49,24 @@ async function api(path, method = 'GET', body, opts = {}) {
 }
 
 /* ---------- format helpers ---------- */
-const money = (n, compact = false) => {
-  const code = (settings?.crm?.currency || 'NGN').toUpperCase();
-  const v = Number(n) || 0;
+let pipelineCurrency = 'NGN';
+let fxRates = { rates: { USD: 1, EUR: 0.92, GBP: 0.77, NGN: 1600 } };
+
+const convertVal = (n, targetCur) => {
+  const val = Number(n) || 0;
+  if (!val || targetCur === 'NGN') return val;
+  const usdNgn = fxRates?.rates?.NGN || settings?.crm?.usdRate || 1600;
+  const inUsd = val / usdNgn;
+  const targetRate = fxRates?.rates?.[targetCur] || 1;
+  return inUsd * targetRate;
+};
+
+const money = (n, compact = false, curOverride = null) => {
+  const code = (curOverride || pipelineCurrency || settings?.crm?.currency || 'NGN').toUpperCase();
+  let v = Number(n) || 0;
+  if (curOverride) {
+    v = curOverride === 'NGN' ? v : convertVal(v, curOverride);
+  }
   try {
     return new Intl.NumberFormat(undefined, {
       style: 'currency', currency: code, maximumFractionDigits: compact ? 1 : 0,
@@ -61,6 +76,12 @@ const money = (n, compact = false) => {
     return `${code} ${Math.round(v).toLocaleString()}`;
   }
 };
+
+function brandAvatar(l, extraClass = '') {
+  const dom = l.website ? domainOf(l.website) : (l.emails?.[0]?.split('@')[1] || '');
+  if (!dom || dom.includes('localhost') || dom.includes('127.0.0.1')) return '';
+  return `<img class="brand-avatar ${extraClass}" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(dom)}&sz=128" alt="" loading="lazy" onerror="this.classList.add('broken')">`;
+}
 const count = (n) => Number(n || 0).toLocaleString();
 const plural = (n, one, many = one + 's') => `${count(n)} ${Number(n) === 1 ? one : many}`;
 const pct = (n) => `${Math.round((Number(n) || 0) * 100)}%`;
@@ -283,9 +304,14 @@ async function refreshDashboard() {
 }
 async function refreshAll() {
   try {
-    const [ls, d] = await Promise.all([api('/leads'), api('/dashboard')]);
+    const [ls, d, fx] = await Promise.all([
+      api('/leads'),
+      api('/dashboard'),
+      api('/rates').catch(() => null),
+    ]);
     leads = ls;
     dash = d;
+    if (fx && fx.rates) fxRates = fx;
   } catch { return; }
   renderSidebar();
   renderLeads();
@@ -463,10 +489,14 @@ function contactMini(l) {
   const e = l.emails?.[0];
   const p = l.phones?.[0];
   const wa = p ? p.replace(/\D/g, '') : null;
+  const eh = l.emailHealth;
+  const ehBadge = eh ? (eh.status === 'verified'
+    ? `<span class="mx-pill verified" title="Mail server verified: ${esc(eh.primaryMx || '')}">✓ ${esc(eh.provider || 'MX OK')}</span>`
+    : `<span class="mx-pill unreachable" title="${esc(eh.reason || 'Will bounce')}">⚠ Bouncing</span>`) : '';
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.name + ' ' + (l.address || l.location || ''))}`;
   const srcUrl = l.sourceUrl || (l.address ? mapUrl : `https://www.google.com/search?q=${encodeURIComponent(l.name + ' ' + (l.location || ''))}`);
   return `<div class="contact-mini">
-    ${e ? `<a href="mailto:${esc(e)}">${esc(e)}</a>` : ''}
+    ${e ? `<span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap"><a href="mailto:${esc(e)}">${esc(e)}</a>${ehBadge}</span>` : ''}
     ${p ? `<span class="contact-phone"><a href="tel:${esc(p)}">${esc(p)}</a>${wa ? ` <a href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-left:5px;color:#25d366" title="Chat on WhatsApp" aria-label="WhatsApp with ${esc(l.name)}"><svg class="ico" style="width:13px;height:13px;vertical-align:-1px"><use href="#i-phone"/></svg></a>` : ''}</span>` : ''}
     ${l.website ? `<a href="${safeHref(l.website)}" target="_blank" rel="noopener noreferrer" title="${esc(l.website)}">${esc(domainOf(l.website) || l.website)}</a>` : ''}
     ${!l.website ? `<a href="${safeHref(srcUrl)}" target="_blank" rel="noopener noreferrer" class="muted small" style="display:inline-flex;align-items:center;gap:3px" title="View online source / map"><svg class="ico" style="width:11px;height:11px"><use href="#i-globe"/></svg> ${esc(l.address ? 'View on Maps' : 'Source')}</a>` : ''}
@@ -478,12 +508,17 @@ function leadRow(l, bulk = true) {
   const nf = nextFollowUp(l);
   const wa = l.phones?.[0] ? l.phones[0].replace(/\D/g, '') : null;
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.name + ' ' + (l.address || l.location || ''))}`;
+  const tech = (l.tech || []).slice(0, 4).map((t) => `<span class="tech-chip">${esc(t)}</span>`).join('');
   return `<tr data-id="${esc(l.id)}" class="${selected.has(l.id) ? 'selected' : ''}">
     ${bulk ? `<td class="cell-check"><input type="checkbox" data-check value="${esc(l.id)}" ${selected.has(l.id) ? 'checked' : ''} aria-label="Select ${esc(l.name)}"></td>` : ''}
     <td class="row-business">
-      <span class="lead-name">${esc(l.name)}</span>
+      <div class="lead-title-row">
+        ${brandAvatar(l)}
+        <span class="lead-name">${esc(l.name)}</span>
+      </div>
       <span class="lead-sub"><i class="priority-dot ${esc(l.priority || 'normal')}" title="${esc(priorityLabel(l.priority))} priority"></i>${esc([l.industry, l.location].filter(Boolean).join(' · ') || 'No industry or location')}${l.address ? ` · <a href="${safeHref(mapUrl)}" target="_blank" rel="noopener noreferrer" class="muted small" title="View address on Google Maps">📍 ${esc(l.address)}</a>` : ''}${l.source && l.source !== 'manual' ? ` <span class="chip">${esc(l.source.split(':')[0])}</span>` : ''}</span>
       ${tags ? `<div class="lead-tags">${tags}</div>` : ''}
+      ${tech ? `<div class="tech-chips">${tech}</div>` : ''}
     </td>
     <td class="row-stage">${stageSelect(l)}</td>
     <td class="row-value"><span class="cell-strong">${l.value ? money(l.value) : '<span class="faint">—</span>'}</span></td>
@@ -707,6 +742,7 @@ $('#bulkclear').addEventListener('click', () => { selected.clear(); renderLeads(
 /* ---------- pipeline ---------- */
 function renderPipelineStats() {
   const d = dash;
+  const cur = pipelineCurrency;
   const openValue = d?.kpis?.openValue ?? leads.filter((l) => OPEN_STATUSES.includes(l.status)).reduce((n, l) => n + (l.value || 0), 0);
   const weighted = d?.kpis?.weightedValue ?? 0;
   const won = leads.filter((l) => l.status === 'won').length;
@@ -714,10 +750,10 @@ function renderPipelineStats() {
   const winRate = won + lost ? won / (won + lost) : 0;
   const avg = won ? leads.filter((l) => l.status === 'won').reduce((n, l) => n + (l.value || 0), 0) / won : 0;
   $('#pipelineStats').innerHTML = [
-    [money(openValue, true), 'Open pipeline'],
-    [money(weighted, true), 'Weighted forecast'],
+    [money(openValue, true, cur), 'Open pipeline'],
+    [money(weighted, true, cur), 'Weighted forecast'],
     [pct(winRate), 'Win rate'],
-    [money(avg, true), 'Average won deal'],
+    [money(avg, true, cur), 'Average won deal'],
   ].map(([v, label]) => `<div class="pstat"><span>${esc(label)}</span><strong>${esc(v)}</strong></div>`).join('');
 }
 function renderPipeline() {
@@ -733,14 +769,14 @@ function renderPipeline() {
     return true;
   });
   const total = list.filter((l) => OPEN_STATUSES.includes(l.status)).reduce((n, l) => n + (l.value || 0), 0);
-  $('#pipelineHint').textContent = `${list.length} shown · ${money(total, true)} open`;
+  $('#pipelineHint').textContent = `${list.length} shown · ${money(total, true, pipelineCurrency)} open`;
   renderPipelineStats();
   $('#pipelineBoard').innerHTML = PIPELINE_STAGES.map((status) => {
     const group = list.filter((l) => l.status === status);
     const value = group.reduce((n, l) => n + (l.value || 0), 0);
     return `<section class="pipe-col stage-${status}" data-stage-col="${status}">
       <div class="pipe-head"><span class="pipe-dot" style="background:var(--stage)"></span><span class="pipe-title">${esc(stageLabel(status))}</span><span class="pipe-count">${group.length}</span></div>
-      <div class="pipe-value">${value ? money(value, true) : 'No value yet'}</div>
+      <div class="pipe-value">${value ? money(value, true, pipelineCurrency) : 'No value yet'}</div>
       <div class="deal-list">${group.map(dealCard).join('') || '<div class="pipe-empty">Drop a lead here</div>'}</div>
     </section>`;
   }).join('');
@@ -749,15 +785,28 @@ function dealCard(l) {
   const nf = nextFollowUp(l);
   const tags = (l.tags || []).slice(0, 3).map((t) => `<span class="deal-tag">${esc(t)}</span>`).join('');
   return `<article class="deal-card" draggable="true" data-id="${esc(l.id)}">
-    <div class="deal-top"><span class="chip">${esc(l.source === 'manual' ? 'manual' : l.source.split(':')[0])}</span><span class="deal-score"><i></i>${esc(l.score ?? 0)}</span></div>
+    <div class="deal-top">
+      ${brandAvatar(l)}
+      <span class="chip">${esc(l.source === 'manual' ? 'manual' : l.source.split(':')[0])}</span>
+      <span class="deal-score"><i></i>${esc(l.score ?? 0)}</span>
+    </div>
     <div class="deal-name">${esc(l.name)}</div>
     <div class="deal-meta">${esc([l.industry, l.location].filter(Boolean).join(' · ') || 'No details yet')}</div>
-    <div class="deal-foot"><span class="deal-value">${l.value ? money(l.value) : '<span class="faint">No value</span>'}</span>${nf ? `<span class="deal-due ${dueClass(nf)}">${esc(dueLabel(nf))}</span>` : ''}</div>
+    <div class="deal-foot"><span class="deal-value">${l.value ? money(l.value, false, pipelineCurrency) : '<span class="faint">No value</span>'}</span>${nf ? `<span class="deal-due ${dueClass(nf)}">${esc(dueLabel(nf))}</span>` : ''}</div>
     ${tags ? `<div class="deal-tags">${tags}</div>` : ''}
     <select class="stage-select ${stageClass(l.status)}" data-stage aria-label="Move ${esc(l.name)}">${STATUSES.map((s) => `<option value="${s}" ${s === l.status ? 'selected' : ''}>${esc(stageLabel(s))}</option>`).join('')}</select>
   </article>`;
 }
 $('#psearch').addEventListener('input', renderPipeline);
+$$('#currencySelector .currency-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('#currencySelector .currency-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    pipelineCurrency = btn.dataset.cur || 'NGN';
+    renderPipelineStats();
+    renderPipeline();
+  });
+});
 $('#powner').addEventListener('change', renderPipeline);
 $('#pipelineAdd').addEventListener('click', openAddLead);
 $('#pipelineFollow').addEventListener('click', () => { selectTab('today'); setTimeout(() => $('#todayTasks')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); });
@@ -902,10 +951,13 @@ function renderDrawer() {
         : overviewPane(lead);
   $('#dlgBody').innerHTML = `
     <div class="drawer-head">
-      <div>
-        <div class="eyebrow">Lead workspace</div>
-        <h2>${esc(lead.name)}</h2>
-        <div class="lead-sub">${esc([lead.industry, lead.location].filter(Boolean).join(' · ') || 'No industry or location')} <span class="stage-pill ${stageClass(lead.status)}">${esc(stageLabel(lead.status))}</span> <span class="chip">${esc(lead.source)}</span></div>
+      <div class="lead-title-row">
+        ${brandAvatar(lead, 'lg')}
+        <div>
+          <div class="eyebrow">Lead workspace</div>
+          <h2>${esc(lead.name)}</h2>
+          <div class="lead-sub">${esc([lead.industry, lead.location].filter(Boolean).join(' · ') || 'No industry or location')} <span class="stage-pill ${stageClass(lead.status)}">${esc(stageLabel(lead.status))}</span> <span class="chip">${esc(lead.source)}</span></div>
+        </div>
       </div>
       <button class="icon-btn" id="dclose" aria-label="Close lead"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
@@ -927,9 +979,30 @@ function overviewPane(lead) {
   const socials = Object.entries(lead.socials || {}).map(([k, v]) => `<a href="${safeHref(v)}" target="_blank" rel="noopener noreferrer"><svg class="ico"><use href="#i-globe"/></svg> ${esc(k)}</a>`).join('');
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.name + ' ' + (lead.address || lead.location || ''))}`;
   const srcUrl = lead.sourceUrl || (lead.address ? mapUrl : `https://www.google.com/search?q=${encodeURIComponent(lead.name + ' ' + (lead.location || ''))}`);
+  const eh = lead.emailHealth;
+  const ehBadge = eh ? (eh.status === 'verified'
+    ? `<span class="mx-pill verified" title="Mail server verified: ${esc(eh.primaryMx || '')}">✓ ${esc(eh.provider || 'MX OK')}</span>`
+    : `<span class="mx-pill unreachable" title="${esc(eh.reason || 'Will bounce')}">⚠ Bouncing</span>`) : '';
+  const verifyBtn = lead.emails?.[0] ? `<button class="btn ghost sm" id="dcheckmx" style="margin-left:6px;padding:2px 8px;font-size:11px" title="Verify email mail server (MX records)"><svg class="ico" style="width:12px;height:12px"><use href="#i-check"/></svg> Verify MX</button>` : '';
+  const techChips = (lead.tech && lead.tech.length)
+    ? `<div style="margin-top:10px"><span class="small muted" style="display:block;margin-bottom:4px">Tech Stack & CMS</span><div class="tech-chips">${lead.tech.map((t) => `<span class="tech-chip">${esc(t)}</span>`).join('')}</div></div>`
+    : '';
+  const icebreakerCard = `
+    <div class="icebreaker-card" style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <strong style="display:inline-flex;align-items:center;gap:6px"><svg class="ico" style="color:var(--accent)"><use href="#i-spark"/></svg> AI Sales Icebreaker & Talking Points</strong>
+        <button class="btn ghost sm" id="dgenicebreaker"><svg class="ico"><use href="#i-spark"/></svg> Generate Icebreaker</button>
+      </div>
+      <div id="dicebreaker-body" style="margin-top:8px">
+        ${lead.notes?.includes('--- Sales Talking Points ---')
+          ? `<div style="font-size:12.5px;line-height:1.5;white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:6px;border:1px solid var(--border)">${esc(lead.notes.slice(lead.notes.indexOf('--- Sales Talking Points ---')))}</div>`
+          : '<p class="muted small" style="margin:4px 0 0">Generate a custom cold outreach hook, industry pain point, and qualification question tailored to this lead.</p>'}
+      </div>
+    </div>`;
+
   return `<div class="drawer-pane">
     <div class="contact-lines">
-      ${lead.emails?.length ? lead.emails.map((e) => `<a href="mailto:${esc(e)}"><svg class="ico"><use href="#i-mail"/></svg> ${esc(e)}</a>`).join('') : ''}
+      ${lead.emails?.length ? lead.emails.map((e) => `<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap"><a href="mailto:${esc(e)}"><svg class="ico"><use href="#i-mail"/></svg> ${esc(e)}</a>${ehBadge}${verifyBtn}</span>`).join('') : ''}
       ${lead.phones?.length ? lead.phones.map((p) => `<a href="tel:${esc(p)}"><svg class="ico"><use href="#i-phone"/></svg> ${esc(p)}</a>`).join('') : ''}
       ${lead.website ? `<a href="${safeHref(lead.website)}" target="_blank" rel="noopener noreferrer" title="${esc(lead.website)}"><svg class="ico"><use href="#i-globe"/></svg> ${esc(domainOf(lead.website) || lead.website)}</a>` : ''}
       ${lead.address ? `<a href="${safeHref(mapUrl)}" target="_blank" rel="noopener noreferrer" title="View address on Google Maps"><svg class="ico"><use href="#i-target"/></svg> ${esc(lead.address)}</a>` : ''}
@@ -937,7 +1010,9 @@ function overviewPane(lead) {
       <a href="${safeHref(srcUrl)}" target="_blank" rel="noopener noreferrer" class="muted" title="View online source / search on Google"><svg class="ico"><use href="#i-search"/></svg> Source on Google</a>
       ${!lead.emails?.length && !lead.phones?.length ? '<span class="muted">No direct email or phone on file yet. Click "Find contacts online" below.</span>' : ''}
     </div>
-    <div class="field-grid">
+    ${techChips}
+    ${icebreakerCard}
+    <div class="field-grid" style="margin-top:16px">
       <div><label for="df-name">Business name</label><input id="df-name" data-field="name" value="${esc(lead.name)}"></div>
       <div><label for="df-website">Website</label><input id="df-website" data-field="website" value="${esc(lead.website)}" placeholder="https://…"></div>
       <div><label for="df-address">Address</label><input id="df-address" data-field="address" value="${esc(lead.address)}" placeholder="Street address…"></div>
@@ -1035,6 +1110,38 @@ function bindDrawer() {
   on('#dsave', 'click', () => saveDrawer(id));
   on('#dhunt', 'click', () => huntLead(id));
   on('#drefresh', 'click', () => enrichLead(id));
+  on('#dcheckmx', 'click', async () => {
+    const btn = $('#dcheckmx');
+    if (btn) btn.disabled = true;
+    try {
+      toast('Checking email mail exchanger (MX) deliverability…');
+      const r = await api(`/leads/${id}/verify-email`, 'POST');
+      if (r.health) {
+        lead.emailHealth = r.health;
+        toast(r.health.status === 'verified' ? `Verified: ${r.health.provider || 'MX OK'}` : `Warning: ${r.health.reason || 'Will bounce'}`, r.health.status === 'verified' ? '' : 'err');
+      }
+      renderDrawer();
+      renderLeads();
+    } catch (err) { toast(err.message, 'error'); }
+    if (btn) btn.disabled = false;
+  });
+  on('#dgenicebreaker', 'click', async () => {
+    const btn = $('#dgenicebreaker');
+    if (btn) btn.disabled = true;
+    try {
+      toast('Generating AI cold call hook & talking points…');
+      const r = await api(`/leads/${id}/icebreaker`, 'POST', { productId: $('#df-product')?.value || lead.product });
+      if (r.icebreaker) {
+        const ice = r.icebreaker;
+        const noteAddition = `\n\n--- Sales Talking Points ---\n🎯 Hook: ${ice.hook}\n💡 Pain Point: ${ice.painPoint}\n❓ Qualifier: ${ice.qualificationQuestion}`;
+        const updated = await api(`/leads/${id}`, 'PATCH', { notes: (lead.notes || '') + noteAddition });
+        applyLead(updated);
+        toast('Icebreaker generated and added to lead notes!');
+        renderDrawer();
+      }
+    } catch (err) { toast(err.message, 'error'); }
+    if (btn) btn.disabled = false;
+  });
   on('#dmerge', 'click', () => openMerge(id));
   on('#dmerge2', 'click', () => openMerge(id));
   on('#ddelete', 'click', () => deleteLead(id));
@@ -1469,6 +1576,14 @@ function fillSettings() {
   if ($('#tchannel')) $('#tchannel').value = s.telegram.channelId || '';
   $('#sxurl').value = s.search.searxngUrl;
   $('#geokey').value = s.geoapify?.apiKey || '';
+  if ($('#wh-enabled')) {
+    $('#wh-enabled').checked = !!s.webhook?.enabled;
+    $('#wh-url').value = s.webhook?.url || '';
+    $('#wh-secret').value = s.webhook?.secret || '';
+    $('#wh-onwon').checked = s.webhook?.onWon !== false;
+    $('#wh-onqualified').checked = s.webhook?.onQualified !== false;
+    $('#wh-oncreated').checked = !!s.webhook?.onCreated;
+  }
   $('#wsnip').value = `<script src="${location.origin}/widget.js" defer></script>`;
   $('#envpw').hidden = !s.passwordFromEnv;
   $('#pwform').hidden = !!s.passwordFromEnv;
@@ -1488,6 +1603,14 @@ function collectSettings() {
     telegram: { token: $('#ttoken').value, channelId: $('#tchannel')?.value?.trim() || '' },
     search: { searxngUrl: $('#sxurl').value.trim() },
     geoapify: { apiKey: $('#geokey').value.trim() },
+    webhook: {
+      enabled: $('#wh-enabled') ? $('#wh-enabled').checked : false,
+      url: $('#wh-url') ? $('#wh-url').value.trim() : '',
+      secret: $('#wh-secret') ? $('#wh-secret').value : '',
+      onWon: $('#wh-onwon') ? $('#wh-onwon').checked : true,
+      onQualified: $('#wh-onqualified') ? $('#wh-onqualified').checked : true,
+      onCreated: $('#wh-oncreated') ? $('#wh-oncreated').checked : false,
+    },
   };
   if ($('#apw').value) { o.newPassword = $('#apw').value; o.currentPassword = $('#cpw').value; }
   return o;
@@ -1541,6 +1664,18 @@ $('#geotest').addEventListener('click', async (e) => {
     settings = await api('/settings', 'PUT', collectSettings());
     const r = await api('/geoapify/test', 'POST', {});
     out.textContent = r.ok ? `Working ✓${r.sample ? ' (e.g. ' + r.sample + ')' : ''} — 1 credit used` : r.error.slice(0, 200);
+    out.className = 'small ' + (r.ok ? 'ok' : 'err');
+  } catch (err) { out.textContent = err.message; out.className = 'small err'; }
+  e.target.disabled = false;
+});
+$('#whtest')?.addEventListener('click', async (e) => {
+  const out = $('#t-webhook');
+  e.target.disabled = true;
+  out.textContent = 'testing…'; out.className = 'small muted';
+  try {
+    settings = await api('/settings', 'PUT', collectSettings());
+    const r = await api('/settings/test-webhook', 'POST', {});
+    out.textContent = r.ok ? `Success ✓ HTTP ${r.status || 200}` : (r.error || 'Webhook failed');
     out.className = 'small ' + (r.ok ? 'ok' : 'err');
   } catch (err) { out.textContent = err.message; out.className = 'small err'; }
   e.target.disabled = false;

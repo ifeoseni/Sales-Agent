@@ -113,6 +113,12 @@
             <p class="muted">Drag a card between stages, or use the stage menu on the card. Values and follow-ups stay in sync everywhere.</p>
           </div>
           <div class="page-actions">
+            <div id="currencySelector" class="currency-selector" title="Switch forecasting currency">
+              <button class="currency-btn active" data-cur="NGN">NGN ₦</button>
+              <button class="currency-btn" data-cur="USD">USD $</button>
+              <button class="currency-btn" data-cur="GBP">GBP £</button>
+              <button class="currency-btn" data-cur="EUR">EUR €</button>
+            </div>
             <button class="btn ghost sm" id="pipelineAdd"><svg class="ico"><use href="#i-plus"/></svg> Add lead</button>
             <button class="btn sm" id="pipelineFollow"><svg class="ico"><use href="#i-clock"/></svg> Follow-ups</button>
           </div>
@@ -316,6 +322,19 @@
           <label for="ttoken" style="margin-top:10px">Bot token</label><input id="ttoken" type="password" autocomplete="off">
           <label for="tchannel" style="margin-top:10px">Channel ID (e.g. -100xxxxxxxxxx)</label><input id="tchannel" placeholder="-100xxxxxxxxxx" autocomplete="off">
           <p style="margin:10px 0 0"><button class="btn ghost sm" id="tgchanneltest">Test Channel Connection</button> <span class="small" id="t-tgchannel"></span></p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Outbound webhooks (Zapier, Make, Slack, Sheets)</h2><p class="muted small">Send live notifications to external systems whenever deals are won, qualified, or leads created. Enter your webhook endpoint URL.</p></div></div>
+          <label class="check" style="margin-top:10px"><input type="checkbox" id="wh-enabled"> Enable outbound webhooks</label>
+          <label for="wh-url" style="margin-top:8px">Webhook URL</label><input id="wh-url" placeholder="https://hooks.zapier.com/hooks/catch/…">
+          <label for="wh-secret" style="margin-top:8px">HMAC Secret (optional, signs payload with X-CodeTech-Signature)</label><input id="wh-secret" type="password" autocomplete="off" placeholder="Optional secret key">
+          <div class="row" style="margin-top:10px;gap:15px;flex-wrap:wrap">
+            <label class="check"><input type="checkbox" id="wh-onwon"> On deal won</label>
+            <label class="check"><input type="checkbox" id="wh-onqualified"> On qualified</label>
+            <label class="check"><input type="checkbox" id="wh-oncreated"> On new lead</label>
+          </div>
+          <p style="margin:12px 0 0"><button class="btn ghost sm" id="whtest">Test webhook ping</button> <span class="small" id="t-webhook"></span></p>
         </div>
 
         <div class="panel">
