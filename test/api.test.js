@@ -117,6 +117,7 @@ test('sales chat answers, knows the catalog, and a failed AI call leaves no dang
   assert.ok(lastMockMessages[0].content.includes('GameCenter'), 'system prompt carries the product catalog');
   const f = await call('POST', '/api/chat', { cookie, body: { sessionId: 't1', message: 'FAILME please' } });
   assert.equal(f.status, 502);
+  assert.match(f.json.error, /busy|try again/i, 'a provider outage is explained, not left blank');
   await call('POST', '/api/chat', { cookie, body: { sessionId: 't1', message: 'Still there?' } });
   const roles = lastMockMessages.filter((m) => m.role !== 'system').map((m) => m.role);
   for (let i = 1; i < roles.length; i++) assert.notEqual(roles[i], roles[i - 1], 'roles alternate: ' + roles.join(','));

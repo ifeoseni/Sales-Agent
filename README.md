@@ -15,7 +15,7 @@ An AI sales assistant, lead finder and small-team CRM for Code Tech Consulting L
 - **Gives every lead a workspace.** Overview, Activity, Tasks and Message tabs plus one-click duplicate merge. You can edit contact details, value, priority, owner, tags and offer without leaving the lead.
 - **Works the list at speed.** Search, filter by stage/contact/priority/tag, sort, paginate, select many leads and bulk-change stage, priority, owner, tags or tasks. Import and export CSV.
 - **Sells for you.** A chat agent that knows your products (GameCenter, HRSolutionEventos, Goal Buddy, services), recommends the right one, and saves visitors' contact details as leads. One agent on your **website widget**, **Telegram** and the dashboard. Admins get a Telegram alert the moment a visitor leaves a number.
-- **Finds direct customers.** Four routes: paste a list of websites (always works), OpenStreetMap business listings, optionally **Geoapify places** (free plan: 3,000 credits/day, no card, attribution required), and web search. It reads each business's own public website (3 pages, robots.txt honoured) for emails, phones and social links, and filters out results that are about the wrong thing or the wrong place.
+- **Finds direct customers.** Four routes: paste a list of websites (always works), OpenStreetMap business listings, optionally **Geoapify places** (free plan: 3,000 credits/day, no card, attribution required), and web search. It reads each business's own public website (3 pages, robots.txt honoured) for emails, phones and social links, and filters out results that are about the wrong thing or the wrong place. Map places with no published email or phone are still saved (tagged **needs contact**) rather than discarded, so the first search is never empty for no visible reason.
 - **Writes the first message** (email, WhatsApp or DM) with one-click open links. **You review and send**: no auto-spam, no WhatsApp fees.
 - **Switch AI engines any time:** Google Gemini, Groq or Ollama, with automatic failover and retry on free-tier limits.
 
@@ -58,6 +58,20 @@ public/                dashboard + embeddable chat widget
 test/                  unit + end-to-end tests (mock AI), including CRM API coverage
 ```
 Data lives in `data/` as JSON files (leads, chats, products, settings). A lead record now includes its stage, value, priority, owner, tags, tasks and activity timeline, so the dashboard and workspace are all derived from the same file. It never leaves your machine except the text sent to the AI engine you choose and, when you use OpenStreetMap or enable Geoapify, the search words and area sent to those map services. Nothing is sold or shared otherwise.
+
+### Where your data lives
+
+There is no separate database server to install. `lib/store.js` is a small file-backed store: every record is validated in memory and written to `data/` (or the folder in `DATA_DIR`) as pretty-printed JSON, using a write-to-temp-then-rename so a crash cannot leave a half-written file. Corrupted files are moved aside as `*.corrupt` instead of blocking startup.
+
+| File | What it holds |
+|---|---|
+| `leads.json` | Every lead: contact details, stage, value, priority, owner, tags, tasks and activity timeline |
+| `conversations.json` | Chat history for the website widget, Telegram and dashboard (90-day retention) |
+| `products.json` | The offer catalog the agent recommends |
+| `settings.json` | Password hash, session secret, AI keys, CRM preferences and widget settings |
+
+Limits and care: one running instance per data folder (writes are not multi-process safe), a 100 MB cap per file, and thousands of leads rather than millions. Run `npm run backup` to copy the folder to `backups/` (keeps the newest 14); `settings.json` contains API keys, so keep backups private. On Docker, the named volume `agent-data` is mounted at `/data` and `DATA_DIR=/data`, so rebuilding the container does not lose records.
+
 
 ## Security summary
 

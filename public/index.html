@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#122019">
 <title>Code Tech Revenue Desk</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -39,8 +41,7 @@
 
 <div id="login" class="login-shell">
   <div class="login-card">
-    <div class="brand-mark large">CT</div>
-    <p class="eyebrow">Code Tech Consulting</p>
+    <img class="login-logo" src="/logo.png" alt="Code Tech Consulting">
     <h1>Revenue desk</h1>
     <p class="login-copy">Your leads, follow-ups and pipeline in one calm place. Sign in to pick up where the team left off.</p>
     <form id="loginForm">
@@ -60,7 +61,7 @@
 <div id="app" class="app" hidden>
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="brand-mark">CT</div>
+      <div class="brand-mark"><img src="/logo-mark.png" alt=""></div>
       <div><strong>Code Tech</strong><span>Revenue desk</span></div>
     </div>
     <nav role="tablist" id="tabs" aria-label="Sections" class="nav">
@@ -182,7 +183,7 @@
         </div>
         <div class="panel finder-panel">
           <div class="grid2 finder-grid">
-            <div style="grid-column:span 2"><label for="fq">Type of business</label><input id="fq" placeholder="e.g. gaming lounge, event planner, private school" list="qs"><datalist id="qs"></datalist></div>
+            <div><label for="fq">Type of business</label><input id="fq" placeholder="e.g. gaming lounge, event planner, private school" list="qs"><datalist id="qs"></datalist></div>
             <div><label for="floc">City / area</label><input id="floc" placeholder="Lagos, Nigeria"></div>
             <div><label for="flim">How many</label><input id="flim" type="number" min="1" max="60" value="15"></div>
           </div>
@@ -190,7 +191,7 @@
             <label class="check"><input type="checkbox" id="sweb" checked> Web search</label>
             <label class="check"><input type="checkbox" id="sosm" checked> OpenStreetMap listings</label>
             <label class="check" title="Optional free Geoapify key. Add one in Settings."><input type="checkbox" id="sgeo"> Geoapify places</label>
-            <span class="toolbar-note">Geoapify is optional and off by default.</span>
+            <span class="toolbar-note" id="sgeoNote">Add a free Geoapify key in Settings to include places.</span>
             <button class="btn ghost sm" id="fstop" hidden>Stop</button>
             <button class="btn" id="fgo"><svg class="ico"><use href="#i-search"/></svg> Find leads</button>
           </div>

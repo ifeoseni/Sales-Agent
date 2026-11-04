@@ -35,11 +35,12 @@ let cmdIndex = 0;
 let globalTimer = null;
 const filters = { q: '', status: '', contact: '', priority: '', tag: '', sort: 'recent' };
 
-async function api(path, method = 'GET', body) {
+async function api(path, method = 'GET', body, opts = {}) {
   const r = await fetch('/api' + path, {
     method,
     headers: body !== undefined ? { 'content-type': 'application/json' } : {},
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...opts,
   });
   if (r.status === 401 && path !== '/login') { showLogin(); throw new Error('Please sign in'); }
   const j = await r.json().catch(() => ({}));
@@ -181,6 +182,7 @@ async function boot() {
   renderLeads();
   renderPipeline();
   $('#floc').value ||= settings.lead.defaultLocation;
+  syncGeoSource();
   if (!$('#chatlog').children.length) addMsg('bot', 'Hi! Ask me about our software, or pretend to be a customer to test me.');
   const hash = location.hash.replace('#', '');
   if (['today', 'pipeline', 'leads', 'finder', 'chat', 'products', 'settings'].includes(hash)) selectTab(hash);
@@ -787,6 +789,24 @@ function suggestQueries() {
   $('#fsuggest').innerHTML = qs.length ? 'Ideas: ' + qs.slice(0, 10).map((x) => `<a href="#" data-q="${esc(x.q)}" title="Target for ${esc(x.p)}">${esc(x.q)}</a>`).join(' · ') : '';
 }
 $('#fsuggest').addEventListener('click', (e) => { const a = e.target.closest('[data-q]'); if (a) { e.preventDefault(); $('#fq').value = a.dataset.q; } });
+// A saved key means the extra place search works: turn it on by default so the
+// first search is not limited to the two free sources. Remember an explicit opt-out.
+const GEO_PREF = 'ct.geoapify';
+function syncGeoSource() {
+  const hasKey = !!settings.geoapify?.apiKey;
+  const box = $('#sgeo');
+  let pref = null;
+  try { pref = localStorage.getItem(GEO_PREF); } catch { /* storage blocked */ }
+  box.disabled = !hasKey;
+  box.checked = hasKey && (pref === null ? true : pref === 'on');
+  $('#sgeoNote').textContent = hasKey
+    ? (box.checked ? 'On because a key is saved. Untick to skip it.' : 'Unticked. Tick to include Geoapify places.')
+    : 'Add a free Geoapify key in Settings to include places.';
+}
+$('#sgeo').addEventListener('change', () => {
+  try { localStorage.setItem(GEO_PREF, $('#sgeo').checked ? 'on' : 'off'); } catch { /* storage blocked */ }
+  syncGeoSource();
+});
 let currentJob = null;
 $('#fstop').addEventListener('click', async () => {
   if (currentJob) { $('#fstop').disabled = true; await api(`/jobs/${currentJob}/cancel`, 'POST', {}).catch(() => {}); }
@@ -819,7 +839,7 @@ async function runJob(buttons, start) {
       if (j.status === 'running') continue;
       if (j.status === 'error') throw new Error(j.error);
       foundLeads = j.leads;
-      $('#fprog').innerHTML += `<br><strong>Done: ${j.leads.length} new leads saved.</strong>` + j.warnings.map((w) => `<br><span class="err">${esc(w)}</span>`).join('');
+      $('#fprog').innerHTML += `<br><strong>Done: ${j.leads.length} new leads saved.</strong>${j.leads.length ? '' : ' <span class="muted">See the notes above for why nothing was usable.</span>'}` + j.warnings.map((w) => `<br><span class="err">${esc(w)}</span>`).join('');
       renderFinderResults();
       await refreshAll();
       break;
@@ -830,7 +850,7 @@ async function runJob(buttons, start) {
   for (const b of buttons) b.disabled = false;
 }
 function renderFinderResults() {
-  $('#fresults').innerHTML = `<div class="panel">${foundLeads.length ? leadTable(foundLeads, { bulk: false }) : '<div class="empty-state"><strong>No new leads with contact details</strong><span>Try different words, a nearby area, or another source.</span></div>'}</div>`;
+  $('#fresults').innerHTML = `<div class="panel">${foundLeads.length ? leadTable(foundLeads, { bulk: false }) : '<div class="empty-state"><strong>No new leads found</strong><span>Try different words or a nearby area, or paste a list of websites for the most reliable results.</span></div>'}</div>`;
 }
 
 /* ---------- drawer / lead workspace ---------- */
@@ -1278,25 +1298,51 @@ function addMsg(who, text) {
   d.textContent = text;
   $('#chatlog').append(d);
   $('#chatlog').scrollTop = 1e6;
+  return d;
+}
+function addTyping() {
+  const d = document.createElement('div');
+  d.className = 'msg bot typing';
+  d.setAttribute('aria-label', 'The agent is typing');
+  d.innerHTML = '<span></span><span></span><span></span>';
+  $('#chatlog').append(d);
+  $('#chatlog').scrollTop = 1e6;
+  return d;
 }
 $('#chatForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const t = $('#chatIn').value.trim();
-  if (!t) return;
+  if (!t || $('#chatSend').disabled) return;
   $('#chatIn').value = '';
   addMsg('user', t);
+  $('#chatInfo').textContent = '';
   $('#chatSend').disabled = true;
+  const typing = addTyping();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60_000);
   try {
-    const r = await api('/chat', 'POST', { sessionId: sid, message: t });
+    const r = await api('/chat', 'POST', { sessionId: sid, message: t }, { signal: ctrl.signal });
+    typing.remove();
     addMsg('bot', r.reply);
     $('#chatInfo').textContent = 'Answered by ' + r.provider;
-  } catch (err) { addMsg('bot', '⚠ ' + err.message); }
-  $('#chatSend').disabled = false;
-  $('#chatIn').focus();
+  } catch (err) {
+    typing.remove();
+    if (err.name === 'AbortError') {
+      addMsg('bot', '⚠ No answer after 60 seconds. The AI engine may be busy — try again, or test your key in Settings → AI.');
+    } else {
+      addMsg('bot', '⚠ ' + err.message);
+    }
+    $('#chatIn').value = t; // keep the message so retrying is one click
+  } finally {
+    clearTimeout(timer);
+    $('#chatSend').disabled = false;
+    $('#chatIn').focus();
+  }
 });
 $('#chatReset').addEventListener('click', async () => {
   await api('/chat', 'POST', { sessionId: sid, reset: true }).catch(() => {});
   $('#chatlog').innerHTML = '';
+  $('#chatInfo').textContent = '';
   addMsg('bot', 'New conversation. How can I help?');
 });
 
@@ -1399,6 +1445,7 @@ $('#ssave').addEventListener('click', async () => {
   try {
     settings = await api('/settings', 'PUT', collectSettings());
     $('#apw').value = ''; $('#cpw').value = '';
+    syncGeoSource();
     $('#sstat').textContent = 'Saved ✓'; $('#sstat').className = 'small ok';
     renderSidebar(); renderToday();
     toast('Settings saved');
@@ -1411,6 +1458,7 @@ $('#tab-settings').addEventListener('click', async (e) => {
   out.textContent = 'testing…'; out.className = 'small muted';
   try {
     settings = await api('/settings', 'PUT', collectSettings());
+    syncGeoSource();
     const r = await api('/provider/test', 'POST', { provider: p });
     out.textContent = r.ok ? 'Working ✓' : r.error.slice(0, 160);
     out.className = 'small ' + (r.ok ? 'ok' : 'err');

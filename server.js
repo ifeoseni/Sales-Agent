@@ -236,13 +236,24 @@ async function api(req, res, url) {
   }
 
   if (p === '/api/chat' && m === 'POST') {
+    const started = Date.now();
     const { sessionId, message, reset } = await readJson(req, 20_000);
     const key = 'admin:' + str(sessionId || 'default', 40);
     if (reset) { resetConversation(key); return json(res, 200, { ok: true }); }
     try {
       const r = await reply(key, 'dashboard', str(message, 1500));
+      log('info', 'chat answered', { duration: Date.now() - started, provider: r.provider });
       return json(res, 200, { reply: r.text, provider: r.provider });
-    } catch (e) { return json(res, 502, { error: e.message }); }
+    } catch (e) {
+      const detail = e.message;
+      log('error', 'chat failed', { duration: Date.now() - started, error: detail });
+      // 429/5xx/timeouts mean "busy", not "broken": give the admin a next step.
+      const busy = /HTTP (429|500|502|503|504)|timed? ?out|aborted|busy|overload|high demand|UNAVAILABLE/i.test(detail);
+      const error = busy
+        ? 'The AI engines are busy right now. Please try again in a minute, or add a second free key in Settings → AI.'
+        : detail;
+      return json(res, 502, { error, detail });
+    }
   }
 
   /* leads */

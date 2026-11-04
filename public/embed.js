@@ -39,12 +39,18 @@ form.addEventListener('submit', async (e) => {
   send.disabled = true;
   const typing = add('b', '…');
   typing.setAttribute('aria-label', 'Assistant is typing');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60_000);
   try {
-    const r = await fetch('/api/public/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: sid, message: text }) });
+    const r = await fetch('/api/public/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: sid, message: text }), signal: ctrl.signal });
     const j = await r.json();
     typing.textContent = r.ok ? j.reply : j.error || 'Something went wrong. Please try again.';
-  } catch {
-    typing.textContent = 'Connection problem. Please check your internet and try again.';
+  } catch (e) {
+    typing.textContent = e.name === 'AbortError'
+      ? 'This is taking longer than expected. Please try again in a moment.'
+      : 'Connection problem. Please check your internet and try again.';
+  } finally {
+    clearTimeout(timer);
   }
   log.scrollTop = log.scrollHeight;
   send.disabled = false;

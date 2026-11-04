@@ -41,11 +41,11 @@ Gemini also has a **Backup model** (pre-filled with a lighter one). Free quotas 
 Tick **Failover** so that if one engine hits its free daily limit, the agent silently switches to another you have set up. Setting up two engines is the best insurance.
 
 ### Step 2b (optional): Add a free Geoapify key
-Geoapify is a second place search. It is **optional and off by default**; the free sources work without it.
+Geoapify is a second place search. It is **optional** but switches on automatically once a key is saved; the free sources work without it.
 
 1. Go to [myprojects.geoapify.com](https://myprojects.geoapify.com/), sign up (no card), and create an API key.
 2. In **Settings → Geoapify places**, paste the key and press **Test key (uses 1 credit)**. You should see **Working ✓**.
-3. Leave **Geoapify places** unticked in *Find leads* unless you want that extra search.
+3. Once the key is saved, **Geoapify places** is ticked automatically in *Find leads*. Untick it to skip that search; the choice is remembered in this browser.
 
 The free plan includes **3,000 credits/day** (about 30 credits for a typical 15-lead search), at up to 5 requests/second. It allows commercial use within the plan, but **attribution is required**: keep the **© OpenStreetMap contributors** and **Powered by Geoapify** line visible under *Find leads*. Geoapify's terms and free limits can change, so check their current [pricing](https://www.geoapify.com/pricing/) and [terms](https://www.geoapify.com/terms-and-conditions/) if you rely on it heavily. The dashboard's **Find leads** page shows this attribution automatically.
 
@@ -84,19 +84,19 @@ Open **Find leads**.
 4. Choose your sources:
    - **Web search** finds businesses that have their own website or social pages.
    - **OpenStreetMap listings** finds businesses on the public map that list a phone number. It has thin coverage in some areas, which is why the free sources run together.
-   - **Geoapify places** is optional and off by default. It searches public OpenStreetMap-based places with your own free Geoapify key (Settings → Geoapify places). A typical search uses about 30 of the 3,000 daily credits.
+   - **Geoapify places** is optional and on by default once a key is saved. It searches public OpenStreetMap-based places with your own free Geoapify key (Settings → Geoapify places). A typical search uses about 30 of the 3,000 daily credits.
 5. Press **Find leads** and wait 1–3 minutes. Progress is shown live. You can press **Stop**; what was found so far is kept.
 
 ### Four ways to find leads (from most to least dependable)
 1. **Paste a list of websites** (open *Have a list of websites?* under the search box). Paste addresses, one per line, from anywhere: your own Google searches, Google Maps, Instagram bios, directories, a conference attendee list. The agent visits each site and pulls out the published emails, phones and social links. **This always works** and is the best way to build a high-quality list quickly.
 2. **OpenStreetMap listings.** Free public map data. Reliable, but only businesses someone mapped with a phone or website.
-3. **Geoapify places (optional, free plan).** Searches the same kind of public map data through Geoapify, then reads each place's published contact details and website. It needs your own free key (Settings → Geoapify places) and is off by default. It is free within 3,000 credits/day; typical searches use about 30. It only recognises common business categories: if the progress box says Geoapify has no category for your wording, use OpenStreetMap or *Paste a list of websites* instead.
+3. **Geoapify places (optional, free plan).** Searches the same kind of public map data through Geoapify, then reads each place's published contact details and website. It needs your own free key (Settings → Geoapify places) and is on by default once that key is saved. It is free within 3,000 credits/day; typical searches use about 30. It only recognises common business categories: if the progress box says Geoapify has no category for your wording, use OpenStreetMap or *Paste a list of websites* instead.
 4. **Web search.** Convenient, but it uses free public search engines (DuckDuckGo) that **throttle automated searches**. When that happens the progress box says *"Web search was blocked"*. It is temporary (usually 10–60 minutes). Don't keep retrying: use options 1–3 meanwhile. For dependable web search, your technical person can connect your own free SearXNG (DEPLOY.md §11).
 
-Results from web search are checked for relevance: anything that is not about your business type **and** your area (for example a London university turning up for "event planner Lagos") is skipped, and the progress box tells you how many were skipped.
+Results from web search are checked for relevance: anything that is not about your business type **and** your area (for example a London university turning up for "event planner Lagos") is skipped, and the progress box tells you how many were skipped. Map listings (OpenStreetMap/Geoapify) are already inside the area, so they are kept even if they publish no email or phone — they are saved with the tag **needs contact** instead of being thrown away.
 
 ### What you get
-Each result shows the business name, any **emails**, **phone numbers**, **website** and **social links** (Facebook, Instagram, LinkedIn, X/Twitter, TikTok, YouTube, WhatsApp, Telegram) that the business has published itself. Results are saved to the **Leads** tab automatically, and duplicates are skipped.
+Each result shows the business name, any **emails**, **phone numbers**, **website** and **social links** (Facebook, Instagram, LinkedIn, X/Twitter, TikTok, YouTube, WhatsApp, Telegram) that the business has published itself. Results are saved to the **Leads** tab automatically, and duplicates are skipped. A map place with only a name, address or website is still saved (tagged **needs contact**) so you can call, visit or use **Search website again for contacts** later.
 
 The **score** is a quick quality hint: an email is worth most, then a phone, website and social pages. Start with the highest scores.
 
@@ -278,8 +278,9 @@ You are responsible for how you use contact details. In Nigeria that means the *
 | Two records for the same business | It was found by different searches | Open the one to remove → **Merge** → choose the lead to keep |
 | "Skipped N results that did not match…" | Web results were about something else or somewhere else | Normal. The filter is protecting you from junk. Try different words |
 | Pasted websites show "unreachable" / "no public contact details" | Site is down, blocks robots, or publishes no contact info | Open it yourself; it may only have a contact form |
-| "OpenStreetMap busy (HTTP 504)" | Public map server overloaded | Try a smaller area, or retry in a minute |
-| Search finds 0 new leads | Everything found was already saved, or had no contacts | Try a different area or wording |
+| "OpenStreetMap busy (HTTP 502/504)" | All public map servers are overloaded | The app now tries three mirrors automatically; retry in a minute or use a smaller area |
+| Search finds 0 new leads | Everything found was already saved, or nothing had a usable website/address/contact | Read the "Skipped:" line in the progress box; try a different area or wording |
+| Sales chat shows "Thinking…" for a long time | Gemini/Groq are busy or your key needs attention | Wait up to a minute; the app then shows the reason. Test the key in Settings → AI, or add a second free engine |
 | A good business has no email | They publish none | Use phone/social; or visit their site |
 | Locked out of the dashboard | Wrong password 8 times | Wait 10 minutes. If the password is lost: see "Reset password" in DEPLOY.md |
 | Chat bubble missing on website | Script not pasted, or agent not reachable from the internet | Check DEPLOY.md §Website widget; open the widget address in a browser |
