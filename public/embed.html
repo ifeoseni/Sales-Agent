@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat</title>
+<style>
+  :root { --accent:#0b6e4f; --bg:#fff; --ink:#14181f; --line:#e3e6ec; --soft:#f3f5f8; --muted:#5b6472; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#171b21; --ink:#e8ebf0; --line:#2a303a; --soft:#0f1216; --accent:#2fa77a; --muted:#98a2b3; } }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { padding: 12px 14px; background: var(--accent); color: #fff; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  header small { display: block; font-weight: 400; opacity: .9; }
+  header button { background: transparent; border: 1px solid rgba(255,255,255,.6); color: #fff; border-radius: 14px; padding: 3px 10px; font: 12px inherit; cursor: pointer; }
+  #log { flex: 1; overflow-y: auto; padding: 12px; }
+  .m { margin: 6px 0; padding: 8px 12px; border-radius: 14px; max-width: 86%; white-space: pre-wrap; word-wrap: break-word; }
+  .u { background: var(--accent); color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
+  .b { background: var(--soft); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  form { display: flex; gap: 8px; padding: 10px 10px 4px; border-top: 1px solid var(--line); }
+  input { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 20px; background: var(--soft); color: var(--ink); font: inherit; min-width: 0; }
+  #s { background: var(--accent); color: #fff; border: 0; border-radius: 20px; padding: 0 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  #s:disabled { opacity: .5; }
+  .note { margin: 0; padding: 2px 12px 8px; font-size: 11px; color: var(--muted); }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  header button:focus-visible { outline-color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <div><span id="title">Chat with us</span><small>AI assistant · replies in seconds</small></div>
+  <button id="clear" type="button" title="Start a new conversation">New chat</button>
+</header>
+<div id="log" role="log" aria-live="polite"></div>
+<form id="f"><input id="i" placeholder="Type your message…" maxlength="1000" autocomplete="off" aria-label="Message" required><button id="s">Send</button></form>
+<p class="note">You're chatting with an AI. Messages and any contact details you share are stored so our team can follow up. Ask us any time to delete them.</p>
+<script src="/embed.js"></script>
+</body>
+</html>

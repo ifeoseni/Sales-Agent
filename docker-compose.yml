@@ -1,0 +1,35 @@
+# Production stack: the agent plus Caddy, which gets a free HTTPS certificate automatically.
+# 1. Point a DNS record (e.g. agent.codetechcl.com) at this server.
+# 2. cp .env.example .env   and fill in DOMAIN, ADMIN_PASSWORD and your AI key(s).
+# 3. docker compose up -d --build
+services:
+  agent:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRUST_PROXY: "1"        # safe here: only Caddy can reach the agent
+    volumes:
+      - agent-data:/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - agent
+
+volumes:
+  agent-data:
+  caddy-data:
+  caddy-config:

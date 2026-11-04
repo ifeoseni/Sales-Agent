@@ -1,0 +1,27 @@
+# Install: sudo cp deploy/codetech-agent.service /etc/systemd/system/ && sudo systemctl enable --now codetech-agent
+[Unit]
+Description=Code Tech Revenue Desk
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codetech
+WorkingDirectory=/opt/codetech-agent
+EnvironmentFile=-/opt/codetech-agent/.env
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=TRUST_PROXY=1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+# Hardening: the agent can only write to its own data folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/codetech-agent/data
+
+[Install]
+WantedBy=multi-user.target

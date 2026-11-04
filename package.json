@@ -1,0 +1,14 @@
+{
+  "name": "codetech-sales-agent",
+  "version": "1.2.0",
+  "description": "Free AI sales agent, lead finder and small-team CRM for Code Tech Consulting Limited",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "backup": "node scripts/backup.mjs",
+    "reset-password": "node scripts/reset-password.mjs",
+    "test": "node --test test/*.test.js"
+  }
+}

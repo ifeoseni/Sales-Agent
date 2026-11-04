@@ -1,0 +1,6 @@
+data/
+backups/
+agent.log
+.env
+node_modules/
+*.corrupt

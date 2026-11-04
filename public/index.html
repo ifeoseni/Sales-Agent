@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#122019">
+<title>Code Tech Revenue Desk</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></symbol>
+  <symbol id="i-pipeline" viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="m21 8-9-5-9 5 9 5 9-5Z"/><path d="m3 8 9 5 9-5M3 8v8l9 5 9-5V8M12 13v8"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2.1Z"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16M3 12A9 9 0 0 1 18.5 5.7L21 8"/><path d="M3 21v-5h5M21 3v5h-5"/></symbol>
+  <symbol id="i-merge" viewBox="0 0 24 24"><path d="M8 3v5a4 4 0 0 0 4 4h4M16 8l4 4-4 4"/><path d="M8 21v-5a4 4 0 0 1 4-4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</svg>
+
+<div id="login" class="login-shell">
+  <div class="login-card">
+    <div class="brand-mark large">CT</div>
+    <p class="eyebrow">Code Tech Consulting</p>
+    <h1>Revenue desk</h1>
+    <p class="login-copy">Your leads, follow-ups and pipeline in one calm place. Sign in to pick up where the team left off.</p>
+    <form id="loginForm">
+      <label for="pw">Dashboard password</label>
+      <input id="pw" type="password" autocomplete="current-password" required placeholder="Enter your password">
+      <p id="loginErr" class="err small" role="alert"></p>
+      <button class="btn wide" type="submit">Sign in <svg class="ico"><use href="#i-arrow"/></svg></button>
+    </form>
+    <p class="login-foot">First run? The password is printed in the terminal window.</p>
+  </div>
+  <div class="login-art" aria-hidden="true">
+    <span class="art-orbit one"></span><span class="art-orbit two"></span><span class="art-dot"></span>
+    <p>“The best pipeline is the one you actually work every day.”</p>
+  </div>
+</div>
+
+<div id="app" class="app" hidden>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">CT</div>
+      <div><strong>Code Tech</strong><span>Revenue desk</span></div>
+    </div>
+    <nav role="tablist" id="tabs" aria-label="Sections" class="nav">
+      <button role="tab" id="t-today" aria-controls="tab-today" data-tab="today" aria-selected="true" class="nav-item"><svg class="ico"><use href="#i-sun"/></svg><span>Today</span></button>
+      <button role="tab" id="t-pipeline" aria-controls="tab-pipeline" data-tab="pipeline" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-pipeline"/></svg><span>Pipeline</span></button>
+      <button role="tab" id="t-leads" aria-controls="tab-leads" data-tab="leads" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-users"/></svg><span>Leads</span><span id="leadCount" class="nav-badge">0</span></button>
+      <button role="tab" id="t-finder" aria-controls="tab-finder" data-tab="finder" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-search"/></svg><span>Find leads</span></button>
+      <button role="tab" id="t-chat" aria-controls="tab-chat" data-tab="chat" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-chat"/></svg><span>Sales chat</span></button>
+      <button role="tab" id="t-products" aria-controls="tab-products" data-tab="products" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-box"/></svg><span>Products</span></button>
+      <button role="tab" id="t-settings" aria-controls="tab-settings" data-tab="settings" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-sliders"/></svg><span>Settings</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="side-goal" id="sideGoal"></div>
+      <button class="nav-item ghost-nav" id="logout"><svg class="ico"><use href="#i-close"/></svg><span>Sign out</span></button>
+    </div>
+  </aside>
+  <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
+
+  <div class="workspace">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open navigation"><svg class="ico"><use href="#i-menu"/></svg></button>
+      <div class="page-head">
+        <div class="eyebrow" id="pageEyebrow">Workspace</div>
+        <h1 id="pageTitle">Today</h1>
+      </div>
+      <div class="top-actions">
+        <label class="global-search" for="globalSearch">
+          <svg class="ico"><use href="#i-search"/></svg>
+          <input id="globalSearch" placeholder="Search anything…" autocomplete="off">
+          <kbd>Ctrl K</kbd>
+        </label>
+        <button class="btn ghost sm quick-add" id="quickAdd"><svg class="ico"><use href="#i-plus"/></svg> New lead</button>
+        <button class="icon-btn" id="themeToggle" aria-label="Switch theme" title="Switch theme"><svg class="ico"><use href="#i-moon"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <!-- TODAY -->
+      <section id="tab-today" role="tabpanel" aria-labelledby="t-today">
+        <div id="todayContent"></div>
+      </section>
+
+      <!-- PIPELINE -->
+      <section id="tab-pipeline" role="tabpanel" aria-labelledby="t-pipeline" hidden>
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">Revenue motion</p>
+            <h2>Move every conversation forward</h2>
+            <p class="muted">Drag a card between stages, or use the stage menu on the card. Values and follow-ups stay in sync everywhere.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn ghost sm" id="pipelineAdd"><svg class="ico"><use href="#i-plus"/></svg> Add lead</button>
+            <button class="btn sm" id="pipelineFollow"><svg class="ico"><use href="#i-clock"/></svg> Follow-ups</button>
+          </div>
+        </div>
+        <div id="pipelineStats" class="pipeline-stats"></div>
+        <div class="panel pipeline-shell">
+          <div class="toolbar compact-toolbar">
+            <label class="search-field"><svg class="ico"><use href="#i-search"/></svg><input id="psearch" placeholder="Filter the board…" aria-label="Filter pipeline"></label>
+            <select id="powner" aria-label="Filter by owner"><option value="">Everyone</option></select>
+            <span class="toolbar-note" id="pipelineHint">Open deals only</span>
+          </div>
+          <div id="pipelineBoard" class="pipeline-board"></div>
+        </div>
+      </section>
+
+      <!-- LEADS -->
+      <section id="tab-leads" role="tabpanel" aria-labelledby="t-leads" hidden>
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">Lead database</p>
+            <h2>Every opportunity, one view</h2>
+            <p class="muted">Search, segment, assign and follow up. Open any lead to see the full story.</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn ghost sm" id="limport">Import CSV</button>
+            <a class="btn ghost sm" href="/api/leads/export.csv" style="text-decoration:none">Export CSV</a>
+            <button class="btn sm" id="ladd"><svg class="ico"><use href="#i-plus"/></svg> Add lead</button>
+            <input type="file" id="lfile" accept=".csv" hidden>
+          </div>
+        </div>
+        <div id="stats" class="stat-strip"></div>
+        <div class="panel">
+          <div class="toolbar leads-toolbar">
+            <label class="search-field grow"><svg class="ico"><use href="#i-search"/></svg><input id="lsearch" placeholder="Search name, email, tag, notes…" aria-label="Search leads"></label>
+            <select id="lstatus" aria-label="Filter by stage"><option value="">All stages</option></select>
+            <select id="lcontact" aria-label="Filter by contact type"><option value="">Any contact</option><option value="email">Has email</option><option value="phone">Has phone</option><option value="none">Missing contact</option></select>
+            <select id="lpriority" aria-label="Filter by priority"><option value="">Any priority</option><option value="high">High priority</option><option value="normal">Normal</option><option value="low">Low</option></select>
+            <select id="ltag" aria-label="Filter by tag"><option value="">Any tag</option></select>
+            <select id="lsort" aria-label="Sort leads"><option value="recent">Recently active</option><option value="created">Newest first</option><option value="name">Name A–Z</option><option value="value">Highest value</option><option value="followup">Next follow-up</option><option value="score">Best contact score</option></select>
+            <button class="btn ghost sm" id="lclear">Clear</button>
+          </div>
+          <div id="bulkbar" class="bulkbar" hidden>
+            <span><strong id="bulkCount">0</strong> selected</span>
+            <select id="bulkstage" aria-label="Move selected leads to stage"><option value="">Move to stage…</option></select>
+            <select id="bulkpriority" aria-label="Set priority"><option value="">Set priority…</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select>
+            <input id="bulkowner" placeholder="Owner…" maxlength="80" aria-label="Assign owner to selected leads">
+            <button class="btn ghost sm" id="bulkownergo">Assign</button>
+            <input id="bulktag" placeholder="Add tag…" maxlength="30" aria-label="Tag selected leads">
+            <button class="btn ghost sm" id="bulktaggo">Add tag</button>
+            <input id="bulktask" placeholder="Next task…" maxlength="200" aria-label="Add a task to selected leads">
+            <button class="btn ghost sm" id="bulktaskgo">Add task</button>
+            <button class="btn danger sm" id="bulkdelete"><svg class="ico"><use href="#i-trash"/></svg> Delete</button>
+            <button class="btn ghost sm" id="bulkclear">Clear</button>
+          </div>
+          <div class="table-wrap" id="ltable"></div>
+          <div id="lpager" class="pager"></div>
+        </div>
+      </section>
+
+      <!-- FIND LEADS -->
+      <section id="tab-finder" role="tabpanel" aria-labelledby="t-finder" hidden>
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">Prospecting</p>
+            <h2>Find your next customers</h2>
+            <p class="muted">Search public business listings and websites, then keep the phone numbers, emails and social links the business has published itself.</p>
+          </div>
+        </div>
+        <div class="panel finder-panel">
+          <div class="grid2 finder-grid">
+            <div style="grid-column:span 2"><label for="fq">Type of business</label><input id="fq" placeholder="e.g. gaming lounge, event planner, private school" list="qs"><datalist id="qs"></datalist></div>
+            <div><label for="floc">City / area</label><input id="floc" placeholder="Lagos, Nigeria"></div>
+            <div><label for="flim">How many</label><input id="flim" type="number" min="1" max="60" value="15"></div>
+          </div>
+          <div class="finder-sources">
+            <label class="check"><input type="checkbox" id="sweb" checked> Web search</label>
+            <label class="check"><input type="checkbox" id="sosm" checked> OpenStreetMap listings</label>
+            <label class="check" title="Optional free Geoapify key. Add one in Settings."><input type="checkbox" id="sgeo"> Geoapify places</label>
+            <span class="toolbar-note">Geoapify is optional and off by default.</span>
+            <button class="btn ghost sm" id="fstop" hidden>Stop</button>
+            <button class="btn" id="fgo"><svg class="ico"><use href="#i-search"/></svg> Find leads</button>
+          </div>
+          <p class="fineprint">Free Geoapify plan: 3,000 credits/day, no card, commercial use with attribution. A typical 15-lead search uses about 30 credits. Listing data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Powered by Geoapify</a>.</p>
+          <div id="fsuggest" class="suggestions"></div>
+          <details class="finder-details">
+            <summary><strong>Have a list of websites?</strong> <span class="muted small">Paste them and I'll pull out the contacts — most reliable</span></summary>
+            <p class="muted small">One address per line, copied from Google results, Google Maps, Instagram bios, a directory, or a customer list. Uses the business type and area above as labels.</p>
+            <label for="urls" class="small">Website addresses</label>
+            <textarea id="urls" placeholder="https://pixelgames.ng&#10;https://www.eliteevents.com.ng&#10;glamweddings.ng" style="min-height:110px"></textarea>
+            <p style="margin:8px 0 0"><button class="btn" id="ugo">Get contacts from these websites</button></p>
+          </details>
+          <div id="fprog" class="progress" aria-live="polite"></div>
+        </div>
+        <div id="fresults"></div>
+      </section>
+
+      <!-- CHAT -->
+      <section id="tab-chat" role="tabpanel" aria-labelledby="t-chat" hidden>
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">Conversation preview</p>
+            <h2>Talk to your sales agent</h2>
+            <p class="muted">Test the agent exactly as a customer sees it. The same agent runs on your website and Telegram.</p>
+          </div>
+          <div class="page-actions"><button class="btn ghost sm" id="chatReset"><svg class="ico"><use href="#i-refresh"/></svg> New conversation</button></div>
+        </div>
+        <div class="panel chat-panel">
+          <div id="chatlog" class="chatlog" aria-live="polite"></div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatIn" placeholder="Type as a customer would…" autocomplete="off" required>
+            <button class="btn" id="chatSend"><svg class="ico"><use href="#i-arrow"/></svg> Send</button>
+          </form>
+          <p id="chatInfo" class="muted small"></p>
+        </div>
+      </section>
+
+      <!-- PRODUCTS -->
+      <section id="tab-products" role="tabpanel" aria-labelledby="t-products" hidden>
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">Offer catalog</p>
+            <h2>What the agent is allowed to sell</h2>
+            <p class="muted">The agent only talks about what is written here. Keep it accurate. Leave price empty to say “we send a quote”.</p>
+          </div>
+          <div class="page-actions"><button class="btn ghost sm" id="padd"><svg class="ico"><use href="#i-plus"/></svg> Add product</button><button class="btn sm" id="psave">Save products</button></div>
+        </div>
+        <div id="plist" class="product-list"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="tab-settings" role="tabpanel" aria-labelledby="t-settings" hidden>
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">Workspace</p>
+            <h2>Settings that shape the desk</h2>
+            <p class="muted">Connect the AI, set your sales targets, and control the public chat widget.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h3>Sales goals</h3><p class="muted small">Used on Today to show progress against your month.</p></div></div>
+          <div class="grid3">
+            <div><label for="scur">Currency code</label><input id="scur" maxlength="3" placeholder="NGN"></div>
+            <div><label for="starget">Monthly target</label><input id="starget" type="number" min="0" step="1000" placeholder="0"></div>
+            <div><label for="sfollow">Default follow-up days</label><input id="sfollow" type="number" min="1" max="30" placeholder="3"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>AI engine (free)</h2><p class="muted small">Pick the active brain. With failover on, if it hits a free-tier limit the agent tries the next configured one automatically.</p></div></div>
+          <div class="grid2" style="margin:12px 0">
+            <div><label for="sprov">Active provider</label><select id="sprov"><option value="gemini">Google Gemini</option><option value="groq">Groq</option><option value="ollama">Ollama (local)</option></select></div>
+            <div style="align-self:end"><label class="check" style="margin:0 0 9px"><input type="checkbox" id="sfail"> Failover to other configured providers</label></div>
+          </div>
+          <div class="grid2">
+            <div class="pcard"><h3>Gemini</h3><p class="small muted">Free key: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+              <label for="gkey">API key</label><input id="gkey" type="password" autocomplete="off">
+              <label for="gmodel" style="margin-top:8px">Model</label><input id="gmodel">
+              <label for="gfall" style="margin-top:8px">Backup model (used if the first is busy or out of quota)</label><input id="gfall">
+              <p style="margin:10px 0 0"><button class="btn ghost sm" data-test="gemini">Test</button> <span class="small" id="t-gemini"></span></p></div>
+            <div class="pcard"><h3>Groq</h3><p class="small muted">Free key: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></p>
+              <label for="qkey">API key</label><input id="qkey" type="password" autocomplete="off">
+              <label for="qmodel" style="margin-top:8px">Model</label><input id="qmodel">
+              <p style="margin:10px 0 0"><button class="btn ghost sm" data-test="groq">Test</button> <span class="small" id="t-groq"></span></p></div>
+            <div class="pcard"><h3>Ollama (runs on this PC)</h3><p class="small muted">No key, no limits. Install from ollama.com and pull a model.</p>
+              <label for="ohost">Host</label><input id="ohost">
+              <label for="omodel" style="margin-top:8px">Model</label><select id="omodel"></select>
+              <p style="margin:10px 0 0"><button class="btn ghost sm" data-test="ollama">Test</button> <span class="small" id="t-ollama"></span></p></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Web search (optional)</h2><p class="muted small">Lead search uses free public search engines, which sometimes throttle automated searches. For dependable web results, run your own free <a href="https://docs.searxng.org" target="_blank" rel="noopener">SearXNG</a> and enter its address (it needs the <code>json</code> format enabled). Leave empty to use DuckDuckGo only. OpenStreetMap and “paste websites” always work.</p></div></div>
+          <label for="sxurl" style="margin-top:8px">SearXNG address</label><input id="sxurl" placeholder="http://localhost:8080">
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Geoapify places (optional, free plan)</h2><p class="muted small">Adds a second search of public business listings, using OpenStreetMap-based place data. Get a free key at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> (no card). The free plan includes <strong>3,000 credits/day</strong> and allows commercial use with attribution; Geoapify's docs also allow storing the results. A typical search uses about 30 credits: 1 to find the area, 1 per 20 listing results, and 1 per business detail. Keep the attribution shown under <strong>Find leads</strong>: <strong>© OpenStreetMap contributors</strong> and <strong>Powered by Geoapify</strong>. Leave empty to keep Geoapify off.</p></div></div>
+          <label for="geokey" style="margin-top:8px">API key</label><input id="geokey" type="password" autocomplete="off">
+          <p style="margin:10px 0 0"><button class="btn ghost sm" id="geotest">Test key (uses 1 credit)</button> <span class="small" id="t-geoapify"></span></p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Company details</h2><p class="muted small">Used in replies and message drafts.</p></div></div>
+          <div class="grid2" style="margin-top:10px">
+            <div><label for="cname">Company name</label><input id="cname"></div>
+            <div><label for="cweb">Website</label><input id="cweb"></div>
+            <div><label for="cemail">Sales email</label><input id="cemail" type="email"></div>
+            <div><label for="cphone">Sales phone</label><input id="cphone"></div>
+            <div><label for="cwa">WhatsApp number (digits, with country code)</label><input id="cwa" placeholder="2348012345678"></div>
+            <div><label for="csig">Message sign-off</label><input id="csig"></div>
+            <div><label for="ccc">Default country calling code</label><input id="ccc" placeholder="234"></div>
+            <div><label for="cloc">Default search location</label><input id="cloc"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Telegram bot</h2><p class="muted small">Create a free bot with <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, paste the token here. Then message your bot <code>/claim YOUR_DASHBOARD_PASSWORD</code> to become an admin who can run <code>/find gaming lounge in Lagos</code>. Everyone else just gets the sales chat.</p></div></div>
+          <label for="ttoken" style="margin-top:10px">Bot token</label><input id="ttoken" type="password" autocomplete="off">
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Website chat widget</h2><p class="muted small">Paste this before <code>&lt;/body&gt;</code> on codetechcl.com. The agent has to be reachable from the internet (see README: free Cloudflare Tunnel).</p></div></div>
+          <input id="wsnip" readonly aria-label="Widget embed code">
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Dashboard password</h2><p id="envpw" class="small muted" hidden>The password is set by the ADMIN_PASSWORD environment variable on your host. Change it there.</p></div></div>
+          <div id="pwform" class="grid2">
+            <div><label for="cpw">Current password</label><input id="cpw" type="password" autocomplete="current-password"></div>
+            <div><label for="apw">New password (min 8 characters, leave empty to keep)</label><input id="apw" type="password" autocomplete="new-password"></div>
+          </div>
+        </div>
+        <div class="save-row"><button class="btn" id="ssave">Save settings</button> <span id="sstat" class="small"></span></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg" class="drawer-dialog"><div id="dlgBody"></div></dialog>
+<dialog id="mergeDlg" class="modal-dialog"><div id="mergeBody"></div></dialog>
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+<div id="command" class="palette" hidden>
+  <div class="palette-card" role="dialog" aria-modal="true" aria-label="Quick actions">
+    <div class="palette-input"><svg class="ico"><use href="#i-search"/></svg><input id="cmdInput" placeholder="Jump to a page or find a lead…" autocomplete="off"><kbd>Esc</kbd></div>
+    <div id="cmdList" class="cmd-list"></div>
+  </div>
+</div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

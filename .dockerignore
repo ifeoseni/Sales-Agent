@@ -1,0 +1,7 @@
+data/
+backups/
+test/
+.env
+.git
+node_modules
+*.md

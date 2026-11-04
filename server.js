@@ -1,0 +1,429 @@
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ROOT, uid } from './lib/store.js';
+
+/* ---------- request tracing for production observability ---------- */
+let requestId = 0;
+const log = (level, msg, meta = {}) => {
+  const ts = new Date().toISOString();
+  const prefix = level === 'error' ? 'ERR' : level === 'warn' ? 'WRN' : 'INF';
+  const parts = [`[${ts}]`, prefix, msg];
+  if (meta.id) parts.push(`rid=${meta.id}`);
+  if (meta.duration) parts.push(`dur=${meta.duration}ms`);
+  if (meta.status) parts.push(`status=${meta.status}`);
+  if (meta.method) parts.push(`method=${meta.method}`);
+  if (meta.path) parts.push(`path=${meta.path}`);
+  if (meta.error) parts.push(`error=${String(meta.error).slice(0, 120)}`);
+  console.log(parts.join(' '));
+};
+
+try { process.loadEnvFile(path.join(ROOT, '.env')); } catch { /* no .env file */ }
+
+const { getSettings, publicSettings, updateSettings, verifyPassword, setPassword, issueToken, checkToken, passwordFromEnv } = await import('./lib/settings.js');
+const { getProducts, setProducts } = await import('./lib/products.js');
+const { chat, ollamaModels, PROVIDERS } = await import('./lib/llm.js');
+const { reply, resetConversation, draftOutreach, matchProduct, flushConversations } = await import('./lib/agent.js');
+const L = await import('./lib/leads.js');
+const { findLeads, enrichLead, leadsFromUrls } = await import('./lib/leadfinder.js');
+const { geoapifyTest } = await import('./lib/geoapify.js');
+const { startTelegram, stopTelegram } = await import('./lib/telegram.js');
+const { allow, blocked, record, clear, underDailyCap } = await import('./lib/ratelimit.js');
+
+const PORT = +process.env.PORT || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
+// Only trust proxy headers when the app really sits behind your own proxy/tunnel (Cloudflare, Caddy, Nginx).
+const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'";
+
+/* ---------- request helpers ---------- */
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const cf = req.headers['cf-connecting-ip'];
+    if (cf) return String(cf).trim();
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (xff.length) return xff[xff.length - 1]; // the entry our own proxy appended; earlier ones are client-controlled
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+const isHttps = (req) => !!req.socket.encrypted || (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https');
+const cookie = (req, name) => (req.headers.cookie || '').split(/;\s*/).map((c) => c.split('=')).find(([k]) => k === name)?.[1];
+const authed = (req) => checkToken(cookie(req, 'ct_sid'));
+
+function setSession(req, res) {
+  res.setHeader('set-cookie', `ct_sid=${issueToken(7)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${7 * 86400}${isHttps(req) ? '; Secure' : ''}`);
+}
+
+const SEC_HEADERS = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' };
+
+const json = (res, code, data) => {
+  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...SEC_HEADERS });
+  res.end(JSON.stringify(data));
+};
+
+async function readJson(req, limit = 200_000) {
+  let size = 0;
+  const chunks = [];
+  for await (const c of req) {
+    size += c.length;
+    if (size > limit) throw Object.assign(new Error('Request too large'), { code: 413 });
+    chunks.push(c);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  const v = raw ? JSON.parse(raw) : {};
+  if (v === null || typeof v !== 'object') throw new SyntaxError('Expected a JSON object or array');
+  return v;
+}
+
+function serveStatic(req, res, pathname) {
+  let rel;
+  try { rel = decodeURIComponent(pathname); } catch { res.writeHead(400); return res.end(); }
+  if (rel === '/') rel = '/index.html';
+  const file = path.normalize(path.join(PUBLIC_DIR, rel));
+  if (!file.startsWith(PUBLIC_DIR + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    res.writeHead(404, SEC_HEADERS);
+    return res.end('Not found');
+  }
+  const ext = path.extname(file);
+  const headers = { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=300', ...SEC_HEADERS };
+  if (ext === '.html') {
+    headers['content-security-policy'] = rel === '/embed.html' ? CSP + '; frame-ancestors *' : CSP + "; frame-ancestors 'none'";
+  }
+  res.writeHead(200, headers);
+  fs.createReadStream(file).pipe(res);
+}
+
+/* ---------- background lead-finder jobs ---------- */
+const jobs = new Map();
+
+function startJob(params, run = findLeads) {
+  const id = uid();
+  const job = { id, status: 'running', progress: ['Starting…'], leads: [], warnings: [], error: null, ctl: { cancelled: false } };
+  jobs.set(id, job);
+  if (jobs.size > 30) jobs.delete(jobs.keys().next().value);
+  run(params, (p) => job.progress.push(p), job.ctl)
+    .then((r) => { job.leads = r.leads; job.warnings = r.warnings; job.scanned = r.scanned; job.status = 'done'; })
+    .catch((e) => { job.error = e.message; job.status = 'error'; });
+  return job;
+}
+const publicJob = ({ ctl, ...j }) => j;
+
+const str = (v, max) => String(v ?? '').trim().slice(0, max);
+
+/* ---------- routes ---------- */
+async function api(req, res, url) {
+  const m = req.method;
+  const p = url.pathname;
+  const ip = clientIp(req);
+
+  if (p === '/healthz') {
+    const s = getSettings();
+    const health = {
+      ok: true,
+      uptime: Math.floor(process.uptime()),
+      version: '1.2.0',
+      provider: s.provider,
+      providers: { gemini: !!s.providers.gemini.apiKey, groq: !!s.providers.groq.apiKey, ollama: !!s.providers.ollama.model },
+      geoapify: !!s.geoapify.apiKey,
+      leadCount: L.stats().total,
+    };
+    return json(res, 200, health);
+  }
+
+  // public: website chat widget
+  if (p === '/api/public/chat' && m === 'POST') {
+    if (!allow('pub:' + ip, 12, 60_000)) return json(res, 429, { error: 'Too many messages, please try again shortly.' });
+    if (!underDailyCap(getSettings().widget.dailyCap)) return json(res, 503, { error: 'We are very busy today. Please contact us directly.' });
+    const { sessionId, message } = await readJson(req, 20_000);
+    if (!/^[\w-]{8,64}$/.test(sessionId || '') || typeof message !== 'string' || !message.trim()) return json(res, 400, { error: 'Bad request' });
+    try {
+      const r = await reply('web:' + sessionId, 'website', message.trim().slice(0, 1000));
+      return json(res, 200, { reply: r.text });
+    } catch (e) {
+      log('error', 'public chat error', { error: e.message });
+      return json(res, 503, { error: 'Our assistant is unavailable right now. Please contact us directly.' });
+    }
+  }
+  if (p === '/api/public/reset' && m === 'POST') {
+    const { sessionId } = await readJson(req, 2000);
+    if (/^[\w-]{8,64}$/.test(sessionId || '')) resetConversation('web:' + sessionId);
+    return json(res, 200, { ok: true });
+  }
+  if (p === '/api/public/info' && m === 'GET') {
+    const c = getSettings().company;
+    return json(res, 200, { name: c.name, products: getProducts().filter((x) => x.status !== 'hidden').map((x) => x.name), version: '1.2.0' });
+  }
+
+  if (p === '/api/login' && m === 'POST') {
+    if (blocked('login:' + ip, 8, 600_000) || blocked('login:all', 60, 3_600_000)) return json(res, 429, { error: 'Too many attempts. Wait 10 minutes.' });
+    const { password } = await readJson(req, 2000);
+    if (!verifyPassword(password)) {
+      record('login:' + ip);
+      record('login:all');
+      return json(res, 401, { error: 'Wrong password' });
+    }
+    clear('login:' + ip);
+    setSession(req, res);
+    return json(res, 200, { ok: true });
+  }
+
+  // everything below needs the admin session
+  if (!authed(req)) return json(res, 401, { error: 'Not logged in' });
+
+  // CSRF: browsers always send Origin on cross-site writes; it must match this host.
+  if (m !== 'GET' && req.headers.origin) {
+    let ok = false;
+    try { ok = new URL(req.headers.origin).host === req.headers.host; } catch { /* "null" origin */ }
+    if (!ok) return json(res, 403, { error: 'Bad origin' });
+  }
+
+  if (p === '/api/logout' && m === 'POST') {
+    res.setHeader('set-cookie', `ct_sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${isHttps(req) ? '; Secure' : ''}`);
+    return json(res, 200, { ok: true });
+  }
+
+  if (p === '/api/settings') {
+    if (m === 'GET') return json(res, 200, publicSettings());
+    if (m === 'PUT') {
+      const body = await readJson(req);
+      const { newPassword, currentPassword } = body;
+      if (newPassword) {
+        if (!verifyPassword(currentPassword)) return json(res, 400, { error: 'Current password is wrong' });
+        try { setPassword(newPassword); } catch (e) { return json(res, 400, { error: e.message }); }
+        setSession(req, res); // old sessions die with the old password; keep this one signed in
+      }
+      const out = updateSettings(body);
+      startTelegram();
+      return json(res, 200, out);
+    }
+  }
+
+  if (p === '/api/stats' && m === 'GET') return json(res, 200, L.stats());
+  if (p === '/api/dashboard' && m === 'GET') return json(res, 200, L.dashboard());
+
+  if (p === '/api/products') {
+    if (m === 'GET') return json(res, 200, getProducts());
+    if (m === 'PUT') {
+      const body = await readJson(req);
+      if (!Array.isArray(body) || body.length > 50) return json(res, 400, { error: 'Expected a list of up to 50 products' });
+      return json(res, 200, setProducts(body));
+    }
+  }
+
+  if (p === '/api/ollama/models' && m === 'GET') {
+    try { return json(res, 200, await ollamaModels(getSettings().providers.ollama.host)); }
+    catch { return json(res, 200, []); }
+  }
+
+  if (p === '/api/provider/test' && m === 'POST') {
+    const { provider } = await readJson(req, 2000);
+    if (!PROVIDERS.includes(provider)) return json(res, 400, { error: 'Unknown provider' });
+    try {
+      const r = await chat({ provider, system: 'Reply with the single word: ok', messages: [{ role: 'user', content: 'ping' }], temperature: 0 });
+      return json(res, 200, { ok: true, reply: r.text.slice(0, 40) });
+    } catch (e) { return json(res, 200, { ok: false, error: e.message }); }
+  }
+
+  if (p === '/api/geoapify/test' && m === 'POST') {
+    const key = getSettings().geoapify.apiKey;
+    if (!key) return json(res, 400, { error: 'Add a Geoapify API key first' });
+    try {
+      const r = await geoapifyTest(key);
+      return json(res, 200, { ok: true, ...r });
+    } catch (e) { return json(res, 200, { ok: false, error: e.message }); }
+  }
+
+  if (p === '/api/chat' && m === 'POST') {
+    const { sessionId, message, reset } = await readJson(req, 20_000);
+    const key = 'admin:' + str(sessionId || 'default', 40);
+    if (reset) { resetConversation(key); return json(res, 200, { ok: true }); }
+    try {
+      const r = await reply(key, 'dashboard', str(message, 1500));
+      return json(res, 200, { reply: r.text, provider: r.provider });
+    } catch (e) { return json(res, 502, { error: e.message }); }
+  }
+
+  /* leads */
+  if (p === '/api/leads' && m === 'GET') return json(res, 200, L.listLeads());
+  if (p === '/api/leads' && m === 'POST') {
+    const b = await readJson(req);
+    if (!str(b.name, 200)) return json(res, 400, { error: 'name is required' });
+    return json(res, 200, L.addLead({ ...b, source: 'manual' }));
+  }
+  if (p === '/api/leads/export.csv' && m === 'GET') {
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="leads.csv"', ...SEC_HEADERS });
+    return res.end(L.toCsv());
+  }
+  if (p === '/api/leads/import' && m === 'POST') {
+    const { csv } = await readJson(req, 5_000_000);
+    return json(res, 200, L.importCsv(String(csv || '')));
+  }
+  if (p === '/api/leads/bulk' && m === 'POST') {
+    const b = await readJson(req, 100_000);
+    if (!Array.isArray(b.ids) || !b.ids.length) return json(res, 400, { error: 'Select at least one lead' });
+    const actions = ['status', 'priority', 'owner', 'value', 'tag', 'task', 'delete'];
+    if (!actions.includes(b.action)) return json(res, 400, { error: 'Unknown bulk action' });
+    if (b.action === 'status' && !L.STATUSES.includes(b.status)) return json(res, 400, { error: 'Unknown stage' });
+    if (b.action === 'priority' && !L.PRIORITIES.includes(b.priority)) return json(res, 400, { error: 'Unknown priority' });
+    if (b.action === 'task' && !str(b.task?.title, 200)) return json(res, 400, { error: 'Task title is required' });
+    return json(res, 200, L.bulkUpdate(b.ids, b.action, b));
+  }
+  if (p === '/api/leads/find' && m === 'POST') {
+    const b = await readJson(req, 5000);
+    const query = str(b.query, 80);
+    const location = str(b.location || getSettings().lead.defaultLocation, 80);
+    if (query.length < 2) return json(res, 400, { error: 'Enter what kind of business to look for' });
+    if ([...jobs.values()].filter((j) => j.status === 'running').length >= 2) return json(res, 429, { error: 'Two searches are already running. Wait for one to finish.' });
+    const sources = [].concat(b.sources || ['web', 'osm']).filter((x) => ['web', 'osm', 'geoapify'].includes(x));
+    if (sources.includes('geoapify') && !getSettings().geoapify.apiKey) return json(res, 400, { error: 'Add a Geoapify API key in Settings, or untick Geoapify.' });
+    const limit = Math.min(Math.max(Math.trunc(+b.limit) || 20, 1), 60);
+    const job = startJob({ query, location, sources: sources.length ? sources : ['web', 'osm'], limit, product: str(b.product, 60) || matchProduct(query) });
+    return json(res, 200, { jobId: job.id });
+  }
+  if (p === '/api/leads/from-urls' && m === 'POST') {
+    const b = await readJson(req, 100_000);
+    const urls = (Array.isArray(b.urls) ? b.urls : String(b.urls || '').split(/[\r\n,;]+/)).map((u) => str(u, 300)).filter(Boolean).slice(0, 300);
+    if (!urls.length) return json(res, 400, { error: 'Paste at least one website address' });
+    if ([...jobs.values()].filter((j) => j.status === 'running').length >= 2) return json(res, 429, { error: 'Two searches are already running. Wait for one to finish.' });
+    const job = startJob({ urls, opts: { industry: str(b.industry, 80), location: str(b.location, 80), product: str(b.product, 60) } }, ({ urls: u, opts }, progress, ctl) => leadsFromUrls(u, opts, progress, ctl));
+    return json(res, 200, { jobId: job.id });
+  }
+  const jobM = p.match(/^\/api\/jobs\/(\w+)(\/cancel)?$/);
+  if (jobM) {
+    const job = jobs.get(jobM[1]);
+    if (!job) return json(res, 404, { error: 'Unknown job' });
+    if (jobM[2] && m === 'POST') { job.ctl.cancelled = true; return json(res, 200, { ok: true }); }
+    if (m === 'GET') return json(res, 200, publicJob(job));
+  }
+
+  const taskM = p.match(/^\/api\/leads\/(\w+)\/tasks(?:\/(\w+))?$/);
+  if (taskM) {
+    const [, id, taskId] = taskM;
+    if (!L.getLead(id)) return json(res, 404, { error: 'Lead not found' });
+    if (!taskId && m === 'POST') {
+      const b = await readJson(req, 5000);
+      if (!str(b.title, 200)) return json(res, 400, { error: 'Task title is required' });
+      return json(res, 200, L.addTask(id, { title: b.title, due: b.due, priority: b.priority }));
+    }
+    if (taskId && m === 'PATCH') {
+      const lead = L.updateTask(id, taskId, await readJson(req, 5000));
+      return lead ? json(res, 200, lead) : json(res, 404, { error: 'Task not found' });
+    }
+    if (taskId && m === 'DELETE') {
+      const lead = L.removeTask(id, taskId);
+      return lead ? json(res, 200, lead) : json(res, 404, { error: 'Task not found' });
+    }
+  }
+
+  const activityM = p.match(/^\/api\/leads\/(\w+)\/activity$/);
+  if (activityM && m === 'POST') {
+    if (!L.getLead(activityM[1])) return json(res, 404, { error: 'Lead not found' });
+    const { text } = await readJson(req, 5000);
+    if (!str(text, 500)) return json(res, 400, { error: 'Write a note first' });
+    return json(res, 200, L.addActivity(activityM[1], { type: 'note', text: str(text, 500) }));
+  }
+
+  const mergeM = p.match(/^\/api\/leads\/(\w+)\/merge$/);
+  if (mergeM && m === 'POST') {
+    const { targetId } = await readJson(req, 2000);
+    if (!str(targetId, 40)) return json(res, 400, { error: 'Choose the lead to keep' });
+    const target = L.mergeLeads(mergeM[1], str(targetId, 40));
+    return target ? json(res, 200, target) : json(res, 404, { error: 'One of the leads was not found' });
+  }
+
+  const leadM = p.match(/^\/api\/leads\/(\w+)(?:\/(draft|enrich))?$/);
+  if (leadM) {
+    const [, id, action] = leadM;
+    const lead = L.getLead(id);
+    if (!lead) return json(res, 404, { error: 'Lead not found' });
+    if (!action && m === 'PATCH') return json(res, 200, L.updateLead(id, await readJson(req)));
+    if (!action && m === 'DELETE') return json(res, 200, { ok: L.removeLead(id) });
+    if (action === 'enrich' && m === 'POST') {
+      try { return json(res, 200, await enrichLead(lead)); } catch (e) { return json(res, 502, { error: e.message }); }
+    }
+    if (action === 'draft' && m === 'POST') {
+      if (lead.status === 'do-not-contact') return json(res, 400, { error: 'This lead is marked do-not-contact' });
+      const { product, channel } = await readJson(req, 2000);
+      const ch = ['email', 'whatsapp', 'dm'].includes(channel) ? channel : 'email';
+      try {
+        const out = await draftOutreach(lead, product || lead.product, ch);
+        L.addActivity(id, { type: 'draft', text: `Drafted ${ch} outreach` });
+        return json(res, 200, out);
+      } catch (e) { return json(res, 502, { error: e.message }); }
+    }
+  }
+
+  return json(res, 404, { error: 'Not found' });
+}
+
+const server = http.createServer(async (req, res) => {
+  const rid = ++requestId;
+  log('info', 'request', { id: rid, method: req.method, path: req.url });
+  const start = Date.now();
+  try {
+    const url = new URL(req.url, 'http://x');
+    if (url.pathname.startsWith('/api/') || url.pathname === '/healthz') return await api(req, res, url);
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, SEC_HEADERS); return res.end(); }
+    return serveStatic(req, res, url.pathname);
+  } catch (e) {
+    const bad = e instanceof SyntaxError;
+    if (!bad && e.code !== 413) log('error', 'request failed', { id: rid, error: e });
+    if (!res.headersSent) json(res, e.code === 413 ? 413 : bad ? 400 : 500, { error: e.code === 413 ? 'Request too large' : bad ? 'Invalid JSON' : 'Server error' });
+  } finally {
+    const dur = Date.now() - start;
+    if (dur > 5000) log('warn', 'slow request', { id: rid, duration: dur, path: req.url });
+  }
+});
+server.headersTimeout = 60_000;
+server.requestTimeout = 90_000;
+server.keepAliveTimeout = 10_000;
+// Close idle keep-alive connections during shutdown so lingering sockets don't hold the process open.
+let connections = new Set();
+server.on('connection', (c) => { connections.add(c); c.on('close', () => connections.delete(c)); });
+
+/* ---------- startup validation ---------- */
+function validateStartup() {
+  const warnings = [];
+  const dataDir = process.env.DATA_DIR || path.join(ROOT, 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    log('info', 'Created data directory', { path: dataDir });
+  }
+  if (!fs.existsSync(PUBLIC_DIR)) warnings.push('public/ directory missing: static files will 404');
+  try {
+    fs.accessSync(dataDir, fs.constants.W_OK);
+  } catch {
+    warnings.push('Data directory is not writable: data will not be saved');
+  }
+  if (warnings.length) warnings.forEach((w) => log('warn', 'startup: ' + w));
+  return warnings;
+}
+
+server.listen(PORT, HOST, () => {
+  validateStartup();
+  log('info', `Agent running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}${passwordFromEnv() ? ' (password from ADMIN_PASSWORD)' : ''}`);
+  startTelegram();
+});
+
+function shutdown() {
+  log('info', 'Shutting down…');
+  stopTelegram();
+  flushConversations();
+  // Drain idle connections so the process can exit promptly.
+  for (const c of connections) { c.end(); connections.delete(c); }
+  server.close(() => {
+    log('info', 'Server closed');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    log('warn', 'Forced exit after timeout');
+    process.exit(0);
+  }, 5000).unref();
+  // Stop accepting new connections immediately.
+  server.unref();
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+process.on('unhandledRejection', (e) => log('error', 'Unhandled rejection', { error: e }));
