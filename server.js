@@ -368,7 +368,7 @@ async function api(req, res, url) {
     if (m === 'GET') return json(res, 200, publicJob(job));
   }
 
-  const taskM = p.match(/^\/api\/leads\/(\w+)\/tasks(?:\/(\w+))?$/);
+  const taskM = p.match(/^\/api\/leads\/([a-zA-Z0-9_-]+)\/tasks(?:\/([a-zA-Z0-9_-]+))?$/);
   if (taskM) {
     const [, id, taskId] = taskM;
     if (!L.getLead(id)) return json(res, 404, { error: 'Lead not found' });
@@ -387,7 +387,7 @@ async function api(req, res, url) {
     }
   }
 
-  const activityM = p.match(/^\/api\/leads\/(\w+)\/activity$/);
+  const activityM = p.match(/^\/api\/leads\/([a-zA-Z0-9_-]+)\/activity$/);
   if (activityM && m === 'POST') {
     if (!L.getLead(activityM[1])) return json(res, 404, { error: 'Lead not found' });
     const { text } = await readJson(req, 5000);
@@ -395,7 +395,7 @@ async function api(req, res, url) {
     return json(res, 200, L.addActivity(activityM[1], { type: 'note', text: str(text, 500) }));
   }
 
-  const mergeM = p.match(/^\/api\/leads\/(\w+)\/merge$/);
+  const mergeM = p.match(/^\/api\/leads\/([a-zA-Z0-9_-]+)\/merge$/);
   if (mergeM && m === 'POST') {
     const { targetId } = await readJson(req, 2000);
     if (!str(targetId, 40)) return json(res, 400, { error: 'Choose the lead to keep' });
@@ -403,7 +403,7 @@ async function api(req, res, url) {
     return target ? json(res, 200, target) : json(res, 404, { error: 'One of the leads was not found' });
   }
 
-  const leadM = p.match(/^\/api\/leads\/(\w+)(?:\/(draft|enrich|hunt|verify-email|icebreaker))?$/);
+  const leadM = p.match(/^\/api\/leads\/([a-zA-Z0-9_-]+)(?:\/(draft|enrich|hunt|verify-email|icebreaker))?$/);
   if (leadM) {
     const [, id, action] = leadM;
     const lead = L.getLead(id);

@@ -41,7 +41,7 @@ test('verifyEmailMx identifies MX records and mail providers', async () => {
   // Test invalid/empty email
   const bad = await verifyEmailMx('invalid-format');
   assert.equal(bad.status, 'invalid');
-  assert.equal(bad.reason, 'Invalid domain');
+  assert.equal(bad.reason, 'Invalid email');
 
   // Test dead/non-existent domain
   const nonExistent = await verifyEmailMx('user@this-domain-definitely-does-not-exist-987654321.xyz');
@@ -106,4 +106,40 @@ test('draftIcebreaker creates cold outreach hooks and pain points', async () => 
   assert.ok(ice.painPoint, 'has pain point');
   assert.ok(ice.qualificationQuestion, 'has qualification question');
   assert.ok(ice.hook.includes('Lagos Premier Events'), 'hook mentions company name');
+});
+
+test('mergeLeads preserves website, address, tech stack, and emailHealth from duplicate', async () => {
+  const { addLead, mergeLeads, removeLead, getLead } = await import('../lib/leads.js');
+  const { lead: l1 } = addLead({ name: 'Lead Target', location: 'Lagos' });
+  const { lead: l2 } = addLead({
+    name: 'Lead Source',
+    website: 'https://source-example.com',
+    address: '10 Admiralty Way, Lekki',
+    sourceUrl: 'https://maps.google.com/source',
+    tech: ['WordPress', 'Paystack'],
+    emailHealth: { status: 'verified', provider: 'Google Workspace' },
+  });
+
+  const merged = mergeLeads(l2.id, l1.id);
+  assert.equal(merged.website, 'https://source-example.com');
+  assert.equal(merged.address, '10 Admiralty Way, Lekki');
+  assert.equal(merged.sourceUrl, 'https://maps.google.com/source');
+  assert.ok(merged.tech.includes('WordPress') && merged.tech.includes('Paystack'));
+  assert.equal(merged.emailHealth.provider, 'Google Workspace');
+
+  removeLead(merged.id);
+});
+
+test('getRates immediately reflects changes to settings.crm.usdRate without waiting for 6hr cache', async () => {
+  const { updateSettings } = await import('../lib/settings.js');
+  updateSettings({ crm: { usdRate: 1550 } });
+  const r1 = await getRates();
+  assert.equal(r1.rates.NGN, 1550);
+
+  updateSettings({ crm: { usdRate: 1650 } });
+  const r2 = await getRates();
+  assert.equal(r2.rates.NGN, 1650);
+
+  // Restore default
+  updateSettings({ crm: { usdRate: 1600 } });
 });

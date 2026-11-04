@@ -62,10 +62,11 @@ const convertVal = (n, targetCur) => {
 };
 
 const money = (n, compact = false, curOverride = null) => {
-  const code = (curOverride || pipelineCurrency || settings?.crm?.currency || 'NGN').toUpperCase();
+  const crmCur = (settings?.crm?.currency || 'NGN').toUpperCase();
+  const code = (curOverride || crmCur).toUpperCase();
   let v = Number(n) || 0;
-  if (curOverride) {
-    v = curOverride === 'NGN' ? v : convertVal(v, curOverride);
+  if (curOverride && curOverride !== 'NGN') {
+    v = convertVal(v, curOverride);
   }
   try {
     return new Intl.NumberFormat(undefined, {
@@ -77,10 +78,23 @@ const money = (n, compact = false, curOverride = null) => {
   }
 };
 
+const GENERIC_MAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com',
+  'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'mail.com',
+  'zoho.com', 'proton.me', 'protonmail.com', 'yandex.com', 'yandex.ru'
+]);
+
 function brandAvatar(l, extraClass = '') {
-  const dom = l.website ? domainOf(l.website) : (l.emails?.[0]?.split('@')[1] || '');
-  if (!dom || dom.includes('localhost') || dom.includes('127.0.0.1')) return '';
-  return `<img class="brand-avatar ${extraClass}" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(dom)}&sz=128" alt="" loading="lazy" onerror="this.classList.add('broken')">`;
+  let dom = l.website ? domainOf(l.website) : '';
+  if (!dom && l.emails?.[0]) {
+    const d = l.emails[0].split('@')[1]?.toLowerCase().trim();
+    if (d && !GENERIC_MAIL_DOMAINS.has(d)) dom = d;
+  }
+  if (!dom || dom.includes('localhost') || dom.includes('127.0.0.1')) {
+    const char = (l.name || '?').trim().charAt(0).toUpperCase();
+    return `<span class="brand-avatar-initial ${extraClass}" aria-hidden="true">${esc(char)}</span>`;
+  }
+  return `<img class="brand-avatar ${extraClass}" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(dom)}&sz=128" alt="" loading="lazy" onerror="this.style.display='none'">`;
 }
 const count = (n) => Number(n || 0).toLocaleString();
 const plural = (n, one, many = one + 's') => `${count(n)} ${Number(n) === 1 ? one : many}`;
