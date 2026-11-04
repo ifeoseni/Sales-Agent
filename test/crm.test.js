@@ -127,3 +127,11 @@ test('duplicate merge keeps one lead and combines its history', () => {
   assert.ok(merged.activities.some((a) => a.type === 'merge'));
   assert.ok(merged.activities.some((a) => a.text === 'Source history'));
 });
+
+test('toVcf generates valid vCard 3.0 format for mobile address books', () => {
+  const vcf = L.toVcf();
+  assert.ok(vcf.includes('BEGIN:VCARD'));
+  assert.ok(vcf.includes('VERSION:3.0'));
+  assert.ok(vcf.includes('END:VCARD'));
+  assert.ok(vcf.includes('EMAIL;TYPE=WORK,INTERNET:'));
+});

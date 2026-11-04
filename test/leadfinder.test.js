@@ -24,7 +24,7 @@ globalThis.fetch = async (url) => {
   return json({}, 404);
 };
 
-const { findLeads } = await import('../lib/leadfinder.js');
+const { findLeads, leadsFromUrls } = await import('../lib/leadfinder.js');
 const { listLeads } = await import('../lib/leads.js');
 
 test('saves a map listing even when it publishes no email or phone', async () => {
@@ -40,6 +40,14 @@ test('saves a map listing even when it publishes no email or phone', async () =>
   assert.ok(r.leads[0].tags.includes('needs contact'), 'flagged for follow-up when no direct contact is published');
   assert.ok(progress.some((p) => /places found/.test(p)));
   assert.ok(listLeads().some((l) => l.name === 'Glam Events'));
+});
+
+test('leadsFromUrls directly converts social profile URLs into leads without generic crawling', async () => {
+  const r = await leadsFromUrls(['https://instagram.com/lagos_parties'], { industry: 'event planner', location: 'Lagos' });
+  assert.equal(r.leads.length, 1);
+  assert.equal(r.leads[0].source, 'social-import');
+  assert.equal(r.leads[0].socials.instagram, 'https://instagram.com/lagos_parties');
+  assert.ok(r.leads[0].tags.includes('social-lead'));
 });
 
 test('restores the real fetch', () => {

@@ -80,3 +80,4 @@ const interval = setInterval(async () => {
     console.log('4. The bot will instantly return the channel ID (usually starts with -100...).');
   }
 }, 3000);
+

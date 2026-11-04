@@ -14,7 +14,7 @@ An AI sales assistant, lead finder and small-team CRM for Code Tech Consulting L
 - **Keeps the follow-up promise.** Add dated tasks to any lead, see everything due today or in the next seven days, tick tasks done, and add notes on the lead's activity timeline.
 - **Gives every lead a workspace.** Overview, Activity, Tasks and Message tabs plus one-click duplicate merge. You can edit contact details, value, priority, owner, tags and offer without leaving the lead.
 - **Works the list at speed.** Search, filter by stage/contact/priority/tag, sort, paginate, select many leads and bulk-change stage, priority, owner, tags or tasks. Import and export CSV.
-- **Sells for you.** A chat agent that knows your products (GameCenter, HRSolutionEventos, Goal Buddy, services), recommends the right one, and saves visitors' contact details as leads. One agent on your **website widget**, **Telegram** and the dashboard. Admins get a Telegram alert the moment a visitor leaves a number.
+- **Sells for you.** A chat agent that knows your products and services (EventOS, GameCenter, HRSolutionEventos, Goal Buddy and IT consulting), recommends the right one, and saves visitors' contact details as leads. One agent on your **website widget**, **Telegram** and the dashboard. Admins get a Telegram alert the moment a visitor leaves a number.
 - **Finds direct customers.** Four routes: paste a list of websites (always works), OpenStreetMap business listings, optionally **Geoapify places** (free plan: 3,000 credits/day, no card, attribution required), and web search. It reads each business's own public website (3 pages, robots.txt honoured) for emails, phones and social links, and filters out results that are about the wrong thing or the wrong place. Map places with no published email or phone are still saved (tagged **needs contact**) rather than discarded, so the first search is never empty for no visible reason.
 - **Writes the first message** (email, WhatsApp or DM) with one-click open links. **You review and send**: no auto-spam, no WhatsApp fees.
 - **Switch AI engines any time:** Google Gemini, Groq or Ollama, with automatic failover and retry on free-tier limits.
@@ -68,6 +68,7 @@ There is no separate database server to install. `lib/store.js` is a small file-
 | `leads.json` | Every lead: contact details, stage, value, priority, owner, tags, tasks and activity timeline |
 | `conversations.json` | Chat history for the website widget, Telegram and dashboard (90-day retention) |
 | `products.json` | The offer catalog the agent recommends |
+| `seed.json` | Which starter catalog version has been applied, so upgrades add new offers once |
 | `settings.json` | Password hash, session secret, AI keys, CRM preferences and widget settings |
 
 Limits and care: one running instance per data folder (writes are not multi-process safe), a 100 MB cap per file, and thousands of leads rather than millions. Run `npm run backup` to copy the folder to `backups/` (keeps the newest 14); `settings.json` contains API keys, so keep backups private. On Docker, the named volume `agent-data` is mounted at `/data` and `DATA_DIR=/data`, so rebuilding the container does not lose records.

@@ -139,6 +139,7 @@
           <div class="page-actions">
             <button class="btn ghost sm" id="limport">Import CSV</button>
             <a class="btn ghost sm" href="/api/leads/export.csv" style="text-decoration:none">Export CSV</a>
+            <a class="btn ghost sm" href="/api/leads/export.vcf" style="text-decoration:none" title="Download phone contacts file to import to your mobile or WhatsApp"><svg class="ico"><use href="#i-phone"/></svg> Export vCard (Phone)</a>
             <button class="btn sm" id="ladd"><svg class="ico"><use href="#i-plus"/></svg> Add lead</button>
             <input type="file" id="lfile" accept=".csv" hidden>
           </div>
@@ -201,7 +202,7 @@
             <summary><strong>Have a list of websites?</strong> <span class="muted small">Paste them and I'll pull out the contacts — most reliable</span></summary>
             <p class="muted small">One address per line, copied from Google results, Google Maps, Instagram bios, a directory, or a customer list. Uses the business type and area above as labels.</p>
             <label for="urls" class="small">Website addresses</label>
-            <textarea id="urls" placeholder="https://pixelgames.ng&#10;https://www.eliteevents.com.ng&#10;glamweddings.ng" style="min-height:110px"></textarea>
+            <textarea id="urls" placeholder="https://pixelgames.ng&#10;https://instagram.com/pixelgames.ng&#10;https://linkedin.com/company/eliteevents&#10;glamweddings.ng" style="min-height:110px"></textarea>
             <p style="margin:8px 0 0"><button class="btn" id="ugo">Get contacts from these websites</button></p>
           </details>
           <div id="fprog" class="progress" aria-live="polite"></div>
@@ -310,8 +311,10 @@
         </div>
 
         <div class="panel">
-          <div class="panel-head"><div><h2>Telegram bot</h2><p class="muted small">Create a free bot with <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, paste the token here. Then message your bot <code>/claim YOUR_DASHBOARD_PASSWORD</code> to become an admin who can run <code>/find gaming lounge in Lagos</code>. Everyone else just gets the sales chat.</p></div></div>
+          <div class="panel-head"><div><h2>Telegram channel & bot</h2><p class="muted small">Add your bot to your private Telegram channel (e.g. <strong>Code Tech Sales Channel</strong>) as an admin. All newly found leads and daily backups will automatically be posted to the channel.</p></div></div>
           <label for="ttoken" style="margin-top:10px">Bot token</label><input id="ttoken" type="password" autocomplete="off">
+          <label for="tchannel" style="margin-top:10px">Channel ID (e.g. -100xxxxxxxxxx)</label><input id="tchannel" placeholder="-100xxxxxxxxxx" autocomplete="off">
+          <p style="margin:10px 0 0"><button class="btn ghost sm" id="tgchanneltest">Test Channel Connection</button> <span class="small" id="t-tgchannel"></span></p>
         </div>
 
         <div class="panel">

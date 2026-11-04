@@ -27,7 +27,7 @@ const { reply, resetConversation, draftOutreach, matchProduct, flushConversation
 const L = await import('./lib/leads.js');
 const { findLeads, enrichLead, leadsFromUrls } = await import('./lib/leadfinder.js');
 const { geoapifyTest } = await import('./lib/geoapify.js');
-const { startTelegram, stopTelegram } = await import('./lib/telegram.js');
+const { startTelegram, stopTelegram, testChannel } = await import('./lib/telegram.js');
 const { allow, blocked, record, clear, underDailyCap } = await import('./lib/ratelimit.js');
 
 const PORT = +process.env.PORT || 3000;
@@ -235,6 +235,15 @@ async function api(req, res, url) {
     } catch (e) { return json(res, 200, { ok: false, error: e.message }); }
   }
 
+  if (p === '/api/telegram/test-channel' && m === 'POST') {
+    const { channelId } = await readJson(req, 2000).catch(() => ({}));
+    try {
+      return json(res, 200, await testChannel(channelId));
+    } catch (e) {
+      return json(res, 400, { ok: false, error: e.message });
+    }
+  }
+
   if (p === '/api/chat' && m === 'POST') {
     const started = Date.now();
     const { sessionId, message, reset } = await readJson(req, 20_000);
@@ -266,6 +275,10 @@ async function api(req, res, url) {
   if (p === '/api/leads/export.csv' && m === 'GET') {
     res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="leads.csv"', ...SEC_HEADERS });
     return res.end(L.toCsv());
+  }
+  if (p === '/api/leads/export.vcf' && m === 'GET') {
+    res.writeHead(200, { 'content-type': 'text/vcard; charset=utf-8', 'content-disposition': 'attachment; filename="leads.vcf"', ...SEC_HEADERS });
+    return res.end(L.toVcf());
   }
   if (p === '/api/leads/import' && m === 'POST') {
     const { csv } = await readJson(req, 5_000_000);
@@ -356,11 +369,12 @@ async function api(req, res, url) {
     }
     if (action === 'draft' && m === 'POST') {
       if (lead.status === 'do-not-contact') return json(res, 400, { error: 'This lead is marked do-not-contact' });
-      const { product, channel } = await readJson(req, 2000);
+      const { product, channel, step } = await readJson(req, 2000);
       const ch = ['email', 'whatsapp', 'dm'].includes(channel) ? channel : 'email';
+      const st = ['cold', 'followup1', 'breakup'].includes(step) ? step : 'cold';
       try {
-        const out = await draftOutreach(lead, product || lead.product, ch);
-        L.addActivity(id, { type: 'draft', text: `Drafted ${ch} outreach` });
+        const out = await draftOutreach(lead, product || lead.product, ch, st);
+        L.addActivity(id, { type: 'draft', text: `Drafted ${ch} outreach (${st})` });
         return json(res, 200, out);
       } catch (e) { return json(res, 502, { error: e.message }); }
     }

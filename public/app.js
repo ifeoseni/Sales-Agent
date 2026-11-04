@@ -462,9 +462,10 @@ function stageSelect(l, attr = 'data-stage') {
 function contactMini(l) {
   const e = l.emails?.[0];
   const p = l.phones?.[0];
+  const wa = p ? p.replace(/\D/g, '') : null;
   return `<div class="contact-mini">
     ${e ? `<a href="mailto:${esc(e)}">${esc(e)}</a>` : ''}
-    ${p ? `<a href="tel:${esc(p)}">${esc(p)}</a>` : ''}
+    ${p ? `<span class="contact-phone"><a href="tel:${esc(p)}">${esc(p)}</a>${wa ? ` <a href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-left:5px;color:#25d366" title="Chat on WhatsApp" aria-label="WhatsApp with ${esc(l.name)}"><svg class="ico" style="width:13px;height:13px;vertical-align:-1px"><use href="#i-phone"/></svg></a>` : ''}</span>` : ''}
     ${l.website ? `<a href="${safeHref(l.website)}" target="_blank" rel="noopener noreferrer">${esc(domainOf(l.website))}</a>` : ''}
     ${!e && !p && !l.website ? '<span class="none">No contact yet</span>' : ''}
   </div>`;
@@ -472,6 +473,7 @@ function contactMini(l) {
 function leadRow(l, bulk = true) {
   const tags = (l.tags || []).slice(0, 4).map((t) => `<span class="chip">${esc(t)}</span>`).join('');
   const nf = nextFollowUp(l);
+  const wa = l.phones?.[0] ? l.phones[0].replace(/\D/g, '') : null;
   return `<tr data-id="${esc(l.id)}" class="${selected.has(l.id) ? 'selected' : ''}">
     ${bulk ? `<td class="cell-check"><input type="checkbox" data-check value="${esc(l.id)}" ${selected.has(l.id) ? 'checked' : ''} aria-label="Select ${esc(l.name)}"></td>` : ''}
     <td class="row-business">
@@ -484,7 +486,7 @@ function leadRow(l, bulk = true) {
     <td class="row-contact">${contactMini(l)}</td>
     <td class="row-follow">${nf ? `<span class="due-pill ${dueClass(nf)}">${esc(dueLabel(nf))}</span>` : '<span class="faint small">—</span>'}</td>
     <td class="row-activity"><span class="cell-muted" title="${esc(dateTime(l.lastActivityAt))}">${esc(relative(l.lastActivityAt))}</span></td>
-    <td class="row-actions-cell"><div class="row-actions"><button class="icon-btn" data-act="open" title="Open lead" aria-label="Open ${esc(l.name)}"><svg class="ico"><use href="#i-chevron"/></svg></button><button class="icon-btn" data-act="task" title="Add a task" aria-label="Add task for ${esc(l.name)}"><svg class="ico"><use href="#i-clock"/></svg></button></div></td>
+    <td class="row-actions-cell"><div class="row-actions">${wa ? `<a class="icon-btn" href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener noreferrer" title="Chat on WhatsApp" aria-label="WhatsApp with ${esc(l.name)}" style="color:#25d366"><svg class="ico"><use href="#i-phone"/></svg></a>` : ''}<button class="icon-btn" data-act="open" title="Open lead" aria-label="Open ${esc(l.name)}"><svg class="ico"><use href="#i-chevron"/></svg></button><button class="icon-btn" data-act="task" title="Add a task" aria-label="Add task for ${esc(l.name)}"><svg class="ico"><use href="#i-clock"/></svg></button></div></td>
   </tr>`;
 }
 function leadTable(list, { bulk = true } = {}) {
@@ -983,11 +985,12 @@ function messagePane(lead) {
   const cache = draftCache && draftCache.leadId === lead.id ? draftCache : null;
   return `<div class="drawer-pane">
     <div class="message-box">
-      <div class="grid2">
+      <div class="grid3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
         <div><label for="dprod">Offer</label><select id="dprod">${prods || '<option value="">No products yet</option>'}</select></div>
         <div><label for="dch">Channel</label><select id="dch"><option value="email" ${cache?.ch === 'email' || !cache ? 'selected' : ''}>Email</option><option value="whatsapp" ${cache?.ch === 'whatsapp' ? 'selected' : ''}>WhatsApp</option><option value="dm" ${cache?.ch === 'dm' ? 'selected' : ''}>Social DM</option></select></div>
+        <div><label for="dstep">Sequence Step</label><select id="dstep"><option value="cold" ${cache?.step === 'cold' || !cache ? 'selected' : ''}>Cold Outreach</option><option value="followup1" ${cache?.step === 'followup1' ? 'selected' : ''}>Day 3 Follow-Up</option><option value="breakup" ${cache?.step === 'breakup' ? 'selected' : ''}>Day 7 Final Touch</option></select></div>
       </div>
-      <div class="row"><button class="btn" id="dgo"><svg class="ico"><use href="#i-spark"/></svg> Write first message</button><span class="muted small">The draft is a starting point. Review it before sending.</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="dgo"><svg class="ico"><use href="#i-spark"/></svg> Draft message</button><span class="muted small">The draft is a starting point. Review it before sending.</span></div>
       <p id="derr" class="err small" role="alert"></p>
       <div id="dout" ${cache ? '' : 'hidden'}>
         <div id="dsubwrap" ${cache?.ch !== 'email' && cache ? 'hidden' : ''}><label for="dsub">Subject</label><input id="dsub" value="${esc(cache?.subject || '')}"></div>
@@ -1151,8 +1154,9 @@ async function generateDraft(id) {
   if (err) err.textContent = '';
   try {
     const ch = $('#dch').value;
-    const d = await api(`/leads/${id}/draft`, 'POST', { product: $('#dprod').value, channel: ch });
-    draftCache = { leadId: id, ch, subject: d.subject || '', body: d.body || '' };
+    const step = $('#dstep')?.value || 'cold';
+    const d = await api(`/leads/${id}/draft`, 'POST', { product: $('#dprod').value, channel: ch, step });
+    draftCache = { leadId: id, ch, step, subject: d.subject || '', body: d.body || '' };
     renderDrawer();
     toast('Draft ready — review before sending', 'gold');
   } catch (e) {
@@ -1416,6 +1420,7 @@ function fillSettings() {
   $('#cphone').value = s.company.phone; $('#cwa').value = s.company.whatsapp; $('#csig').value = s.company.signature;
   $('#ccc').value = s.lead.defaultCountryCode; $('#cloc').value = s.lead.defaultLocation;
   $('#ttoken').value = s.telegram.token;
+  if ($('#tchannel')) $('#tchannel').value = s.telegram.channelId || '';
   $('#sxurl').value = s.search.searxngUrl;
   $('#geokey').value = s.geoapify?.apiKey || '';
   $('#wsnip').value = `<script src="${location.origin}/widget.js" defer></script>`;
@@ -1434,7 +1439,7 @@ function collectSettings() {
     },
     company: { name: $('#cname').value, website: $('#cweb').value, email: $('#cemail').value, phone: $('#cphone').value, whatsapp: $('#cwa').value, signature: $('#csig').value },
     lead: { defaultCountryCode: $('#ccc').value.replace(/\D/g, '') || '234', defaultLocation: $('#cloc').value },
-    telegram: { token: $('#ttoken').value },
+    telegram: { token: $('#ttoken').value, channelId: $('#tchannel')?.value?.trim() || '' },
     search: { searxngUrl: $('#sxurl').value.trim() },
     geoapify: { apiKey: $('#geokey').value.trim() },
   };
@@ -1450,6 +1455,24 @@ $('#ssave').addEventListener('click', async () => {
     renderSidebar(); renderToday();
     toast('Settings saved');
   } catch (err) { $('#sstat').textContent = err.message; $('#sstat').className = 'small err'; }
+});
+
+$('#tgchanneltest')?.addEventListener('click', async () => {
+  const lbl = $('#t-tgchannel');
+  const btn = $('#tgchanneltest');
+  if (btn) btn.disabled = true;
+  if (lbl) { lbl.textContent = 'Testing channel…'; lbl.className = 'small'; }
+  try {
+    const ch = $('#tchannel')?.value?.trim();
+    const r = await api('/telegram/test-channel', 'POST', { channelId: ch });
+    if (lbl) { lbl.textContent = `✓ Connected! Sent test alert via @${r.botUsername}`; lbl.className = 'small ok'; }
+    toast('Channel test message sent successfully!', 'gold');
+  } catch (err) {
+    if (lbl) { lbl.textContent = '✗ ' + err.message; lbl.className = 'small err'; }
+    toast(err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 });
 $('#tab-settings').addEventListener('click', async (e) => {
   const p = e.target.dataset.test;
