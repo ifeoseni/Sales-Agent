@@ -124,6 +124,7 @@ html[data-theme="dark"] {
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+img { max-width: 100%; }
 html { scroll-behavior: smooth; }
 body {
   margin: 0;

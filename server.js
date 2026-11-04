@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { ROOT, uid } from './lib/store.js';
 
 /* ---------- request tracing for production observability ---------- */
@@ -35,6 +36,19 @@ const HOST = process.env.HOST || '127.0.0.1';
 // Only trust proxy headers when the app really sits behind your own proxy/tunnel (Cloudflare, Caddy, Nginx).
 const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
 const PUBLIC_DIR = path.join(ROOT, 'public');
+// A new URL for every asset change: Cloudflare caches CSS/JS for four hours, so
+// a fixed /style.css can pair new HTML with an old stylesheet (oversized logos).
+const ASSET_V = (() => {
+  try {
+    const hash = crypto.createHash('sha1');
+    for (const f of ['style.css', 'app.js', 'embed.js', 'logo.png', 'logo-mark.png', 'favicon.png', 'apple-touch-icon.png']) {
+      hash.update(fs.readFileSync(path.join(PUBLIC_DIR, f)));
+    }
+    return hash.digest('hex').slice(0, 10);
+  } catch {
+    return String(Date.now());
+  }
+})();
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'";
 
@@ -90,6 +104,10 @@ function serveStatic(req, res, pathname) {
   const headers = { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=300', ...SEC_HEADERS };
   if (ext === '.html') {
     headers['content-security-policy'] = rel === '/embed.html' ? CSP + '; frame-ancestors *' : CSP + "; frame-ancestors 'none'";
+    const html = fs.readFileSync(file, 'utf8').replaceAll('__ASSET_V__', ASSET_V);
+    headers['content-length'] = Buffer.byteLength(html);
+    res.writeHead(200, headers);
+    return res.end(html);
   }
   res.writeHead(200, headers);
   fs.createReadStream(file).pipe(res);

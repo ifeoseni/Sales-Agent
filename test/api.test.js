@@ -75,7 +75,16 @@ test('health, security headers, and locked API when logged out', async () => {
   assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
-  assert.match((await call('GET', '/embed.html')).headers.get('content-security-policy'), /frame-ancestors \*/);
+  // Assets carry a content hash so Cloudflare cannot pair new HTML with an old stylesheet.
+  assert.match(page.text, /\/style\.css\?v=[a-f0-9]{10}/);
+  assert.match(page.text, /\/app\.js\?v=[a-f0-9]{10}/);
+  assert.match(page.text, /\/logo-mark\.png\?v=[a-f0-9]{10}/);
+  assert.ok(!page.text.includes('__ASSET_V__'));
+  assert.match(page.text, /class="login-logo"[^>]*width="248"[^>]*height="188"/);
+  assert.match(page.text, /logo-mark\.png[^>]*width="40"[^>]*height="27"/);
+  const embed = await call('GET', '/embed.html');
+  assert.match(embed.text, /\/embed\.js\?v=[a-f0-9]{10}/);
+  assert.match(embed.headers.get('content-security-policy'), /frame-ancestors \*/);
   assert.equal((await call('GET', '/..%2fserver.js')).status, 404);
 });
 
@@ -90,6 +99,15 @@ test('first-run password works, is hashed on disk, and wrong ones fail', async (
   const stored = fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8');
   assert.ok(!stored.includes(password));
   assert.equal((await call('GET', '/api/settings', { cookie })).status, 200);
+});
+
+test('catalog puts the Event Owner App first with its live URL', async () => {
+  const r = await call('GET', '/api/products', { cookie });
+  assert.equal(r.status, 200);
+  assert.equal(r.json[0].id, 'eventos');
+  assert.equal(r.json[0].type, 'service');
+  assert.equal(r.json[0].demoUrl, 'https://eventownerapp.com');
+  assert.match(r.json[0].name, /Event Owner App/);
 });
 
 test('settings never expose secrets and ignore unknown keys / prototype pollution', async () => {
