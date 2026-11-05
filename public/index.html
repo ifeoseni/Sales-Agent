@@ -36,6 +36,7 @@
   <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
   <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 17h.01"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
 </svg>
 
@@ -71,6 +72,7 @@
       <button role="tab" id="t-finder" aria-controls="tab-finder" data-tab="finder" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-search"/></svg><span>Find leads</span></button>
       <button role="tab" id="t-chat" aria-controls="tab-chat" data-tab="chat" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-chat"/></svg><span>Sales chat</span></button>
       <button role="tab" id="t-products" aria-controls="tab-products" data-tab="products" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-box"/></svg><span>Products</span></button>
+      <button role="tab" id="t-guide" aria-controls="tab-guide" data-tab="guide" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-help"/></svg><span>Guide</span></button>
       <button role="tab" id="t-settings" aria-controls="tab-settings" data-tab="settings" aria-selected="false" tabindex="-1" class="nav-item"><svg class="ico"><use href="#i-sliders"/></svg><span>Settings</span></button>
     </nav>
     <div class="sidebar-foot">
@@ -94,6 +96,7 @@
           <kbd>Ctrl K</kbd>
         </label>
         <button class="btn ghost sm quick-add" id="quickAdd"><svg class="ico"><use href="#i-plus"/></svg> New lead</button>
+        <button class="icon-btn" id="helpBtn" aria-label="Open the guide" title="Guide: how to use this app"><svg class="ico"><use href="#i-help"/></svg></button>
         <button class="icon-btn" id="themeToggle" aria-label="Switch theme" title="Switch theme"><svg class="ico"><use href="#i-moon"/></svg></button>
       </div>
     </header>
@@ -186,9 +189,126 @@
           <div>
             <p class="eyebrow">Prospecting</p>
             <h2>Find your next customers</h2>
-            <p class="muted">Search public business listings and websites, then keep the phone numbers, emails and social links the business has published itself.</p>
+            <p class="muted">Search public business listings and websites, then keep the phone numbers, emails and social links the business has published itself. Explee adds global people and company search — it never sends outreach for you.</p>
           </div>
         </div>
+
+        <div class="panel explee-panel" id="expleePanel">
+          <div class="explee-head">
+            <div class="explee-brand">
+              <span class="explee-mark" aria-hidden="true"><svg class="ico"><use href="#i-spark"/></svg></span>
+              <div>
+                <p class="eyebrow">Explee · lead generation only</p>
+                <h3>Global prospect search</h3>
+                <p class="muted small">Find decision-makers and companies anywhere in the world. Nothing is emailed or messaged — Explee only supplies the data, and every lead you keep lands in this CRM.</p>
+              </div>
+            </div>
+            <div class="explee-head-actions">
+              <span class="explee-badge" id="exPlan">Checking…</span>
+              <button type="button" class="btn ghost sm" id="exRefresh" title="Refresh balance and usage"><svg class="ico"><use href="#i-refresh"/></svg> Refresh</button>
+            </div>
+          </div>
+
+          <div class="explee-metrics">
+            <div class="explee-metric">
+              <span>Available now</span>
+              <strong id="exAvailable">—</strong>
+              <small id="exAvailableSub">within the pace</small>
+            </div>
+            <div class="explee-metric">
+              <span>Explee balance</span>
+              <strong id="exBalance">—</strong>
+              <small id="exBalanceSub">credits on the account</small>
+            </div>
+            <div class="explee-metric">
+              <span>Lifetime used</span>
+              <strong id="exUsed">—</strong>
+              <small id="exUsedSub">of 3,000 credits</small>
+            </div>
+            <div class="explee-metric">
+              <span>Free searches today</span>
+              <strong id="exFree">—</strong>
+              <small id="exFreeSub">50 per day</small>
+            </div>
+          </div>
+
+          <div class="explee-budget">
+            <div class="explee-budget-top"><span>Lifetime budget runway</span><strong id="exBudgetLabel">—</strong></div>
+            <div class="explee-bar" id="exBarWrap" role="progressbar" aria-label="Lifetime budget used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="exBar"></span></div>
+            <div class="explee-budget-foot"><span id="exBudgetFoot">Checking the budget…</span><span id="exSavedCount"></span></div>
+          </div>
+
+          <div class="explee-mode-row">
+            <div class="explee-modes" role="group" aria-label="What to search for">
+              <button type="button" class="explee-mode active" data-exmode="people">People</button>
+              <button type="button" class="explee-mode" data-exmode="companies">Companies</button>
+            </div>
+            <span class="explee-hint">People mode finds decision-makers at matching companies. Companies mode returns the businesses themselves.</span>
+          </div>
+
+          <div class="grid2 explee-form">
+            <div class="full">
+              <label for="exDef">Company definition</label>
+              <input id="exDef" maxlength="300" placeholder="Event planning companies, wedding venues, conference centres">
+              <span class="field-hint">Plain words work best. Add a city when you want a tighter result.</span>
+            </div>
+            <div id="exTitlesWrap">
+              <label for="exTitles">Job titles</label>
+              <input id="exTitles" maxlength="400" placeholder="Founder, Owner, Events Manager">
+              <span class="field-hint">Comma separated. Used in People mode.</span>
+            </div>
+            <div>
+              <label for="exCountries">Countries</label>
+              <input id="exCountries" maxlength="120" placeholder="Leave blank for worldwide">
+              <span class="field-hint">ISO codes such as US, GB, NG, KE, ZA, AE. Blank = worldwide.</span>
+            </div>
+            <div>
+              <label for="exLimit">New leads to collect</label>
+              <select id="exLimit">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="30">30</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <span class="field-hint">Only leads you have not seen before are kept.</span>
+            </div>
+            <div>
+              <label for="exProduct">Tag with offer</label>
+              <select id="exProduct"><option value="">No offer</option></select>
+              <span class="field-hint">Optional. Links the new leads to one of your offers.</span>
+            </div>
+          </div>
+
+          <div class="explee-presets" id="exPresets" aria-label="Country presets">
+            <span class="explee-preset-label">Quick regions</span>
+            <button type="button" class="explee-preset is-on" data-countries="">Worldwide</button>
+            <button type="button" class="explee-preset" data-countries="NG, GH, KE, ZA">Africa</button>
+            <button type="button" class="explee-preset" data-countries="GB, IE, DE, FR, NL">Europe</button>
+            <button type="button" class="explee-preset" data-countries="US, CA">North America</button>
+            <button type="button" class="explee-preset" data-countries="AE, SA, QA">Gulf</button>
+            <button type="button" class="explee-preset" data-countries="SG, MY, PH">Southeast Asia</button>
+          </div>
+
+          <div class="explee-actions">
+            <button type="button" class="btn" id="exPreview"><svg class="ico"><use href="#i-search"/></svg> Preview free matches</button>
+            <button type="button" class="btn ghost" id="exSave" disabled>Save all to CRM</button>
+            <span class="explee-note" id="exNote">Searching uses Explee’s free zone: up to 10 results per request, 50 requests a day.</span>
+          </div>
+          <div id="exProgress" class="progress" aria-live="polite"></div>
+          <p class="explee-first small"><strong>First time?</strong> 1. Describe the companies (and, for People, the job titles). 2. Press <em>Preview</em> and look at the list. 3. Press <em>Save</em>. Saved leads without an email or phone are handed to the free contact agent automatically.</p>
+          <details class="explee-help">
+            <summary>How the $30 lifetime credit works</summary>
+            <div class="explee-help-body">
+              <p><strong>Searching is free.</strong> Explee gives the first 10 results of each request at no cost, and this app never asks for more than 10 at a time. It also keeps deduplication local, because Explee’s own exclude lists would switch the free zone off.</p>
+              <p><strong>Only contact enrichment spends credits.</strong> A verified work email costs about <strong>1.5 credits</strong> (1.5¢) and a phone number about <strong>15 credits</strong> (15¢). You are charged only when something is found. Premium matching costs 5 and 30 credits.</p>
+              <p><strong>The $30 must last five years.</strong> The budget unlocks at roughly 50 credits a month, and unused allowance carries forward. The lifetime ceiling can never be exceeded, and the app will not spend the account below the balance floor.</p>
+              <p><strong>Different countries are fine.</strong> Leave Countries blank for worldwide, or type ISO codes. Duplicate leads are filtered against this CRM and against everything Explee has already returned, so repeat searches stay clean.</p>
+            </div>
+          </details>
+        </div>
+        <div id="exResults"></div>
+
         <div class="panel finder-panel">
           <div class="grid2 finder-grid">
             <div><label for="fq">Type of business</label><input id="fq" placeholder="e.g. gaming lounge, event planner, private school" list="qs"><datalist id="qs"></datalist></div>
@@ -251,6 +371,11 @@
       </section>
 
       <!-- SETTINGS -->
+      <!-- GUIDE -->
+      <section id="tab-guide" role="tabpanel" aria-labelledby="t-guide" hidden>
+        <div id="guideContent"></div>
+      </section>
+
       <section id="tab-settings" role="tabpanel" aria-labelledby="t-settings" hidden>
         <div class="page-intro">
           <div>
@@ -301,6 +426,20 @@
           <div class="panel-head"><div><h2>Geoapify places (optional, free plan)</h2><p class="muted small">Adds a second search of public business listings, using OpenStreetMap-based place data. Get a free key at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> (no card). The free plan includes <strong>3,000 credits/day</strong> and allows commercial use with attribution; Geoapify's docs also allow storing the results. A typical search uses about 30 credits: 1 to find the area, 1 per 20 listing results, and 1 per business detail. Keep the attribution shown under <strong>Find leads</strong>: <strong>© OpenStreetMap contributors</strong> and <strong>Powered by Geoapify</strong>. Leave empty to keep Geoapify off.</p></div></div>
           <label for="geokey" style="margin-top:8px">API key</label><input id="geokey" type="password" autocomplete="off">
           <p style="margin:10px 0 0"><button class="btn ghost sm" id="geotest">Test key (uses 1 credit)</button> <span class="small" id="t-geoapify"></span></p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><h2>Explee lead generation</h2><p class="muted small">A <strong>$30 lifetime credit budget</strong> that has to last five years. This integration only generates leads — it never starts campaigns or sends outreach. Balances, usage and pacing are shown on <strong>Find leads</strong>.</p></div></div>
+          <div class="grid3">
+            <div><label for="exbudget">Lifetime budget (credits)</label><input id="exbudget" type="number" min="0" step="100" placeholder="3000"><span class="field-hint">1 credit = $0.01. 3,000 = $30. 0 turns paid lookups off.</span></div>
+            <div><label for="exmonths">Must last (months)</label><input id="exmonths" type="number" min="1" max="600" placeholder="60"><span class="field-hint">60 months = five years.</span></div>
+            <div><label for="exfloor">Balance floor (credits)</label><input id="exfloor" type="number" min="0" step="10" placeholder="100"><span class="field-hint">Never spend the account below this.</span></div>
+          </div>
+          <div class="grid2" style="margin-top:12px">
+            <div><label for="exdefcountries">Default countries</label><input id="exdefcountries" placeholder="Blank = worldwide"><span class="field-hint">ISO codes, comma separated. Used by API callers that omit countries; the Find leads box always wins.</span></div>
+            <div style="align-self:end"><label class="check" style="margin:0 0 9px"><input type="checkbox" id="expace"> Pace spending across the lifetime budget</label></div>
+          </div>
+          <p class="fineprint" id="exenvnote">Paid actions stop at the lifetime ceiling even if pacing is off. The Explee API keeps a positive balance requirement.</p>
         </div>
 
         <div class="panel">

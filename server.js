@@ -33,6 +33,8 @@ const { verifyEmailMx } = await import('./lib/verify.js');
 const { testWebhook } = await import('./lib/webhook.js');
 const { getRates } = await import('./lib/currency.js');
 const { allow, blocked, record, clear, underDailyCap } = await import('./lib/ratelimit.js');
+const { explee } = await import('./lib/explee.js');
+const { discoverPeople, discoverCompanies, saveDiscovered } = await import('./lib/explee-discovery.js');
 
 const PORT = +process.env.PORT || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -133,6 +135,46 @@ const publicJob = ({ ctl, ...j }) => j;
 
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
 
+/** "NG, GH", ["NG","GH"] or "" (worldwide) -> ["NG","GH"]. */
+const isoCountries = (v) => (Array.isArray(v) ? v : String(v ?? '').split(/[,\s]+/))
+  .map((c) => String(c).trim().toUpperCase())
+  .filter((c) => /^[A-Z]{2}$/.test(c))
+  .slice(0, 20);
+
+/** Free fallback: Explee gives leads; the contact agent finds email/phone when Explee's result had none. */
+function huntMissingContacts(leads) {
+  const need = (leads || []).filter((l) => l && !(l.emails || []).length && !(l.phones || []).length);
+  if (!need.length) return null;
+  const job = startJob({ ids: need.map((l) => l.id) }, async ({ ids }, progress, ctl) => {
+    const found = [];
+    for (const id of ids) {
+      if (ctl.cancelled) break;
+      try {
+        const r = await enrichLeadOnline(id, { force: true });
+        if (r.updated) found.push(r.lead);
+        progress(`${L.getLead(id)?.name || id}: ${r.updated ? 'contacts found' : 'nothing public found'}`);
+      } catch (e) { progress(`${id}: ${e.message}`); }
+    }
+    return { leads: found, warnings: [], scanned: ids.length };
+  });
+  return job.id;
+}
+
+/** Maps an Explee failure to an HTTP status the dashboard can act on. */
+function expleeFailure(res, e) {
+  const code = e?.code || 'explee_error';
+  const status = /free_zone|rate_limited/.test(code) ? 429
+    : /paid_disabled|lifetime_cap|pace_limit|balance_floor|payment_required/.test(code) ? 402
+      : /not_configured|invalid_input|bad_request/.test(code) ? 400
+        : e?.status === 422 ? 422
+          : 502;
+  return json(res, status, {
+    error: e?.message || 'Explee request failed',
+    code,
+    ...(e?.retryAfter ? { retryAfter: e.retryAfter } : {}),
+  });
+}
+
 /* ---------- routes ---------- */
 async function api(req, res, url) {
   const m = req.method;
@@ -148,6 +190,7 @@ async function api(req, res, url) {
       provider: s.provider,
       providers: { gemini: !!s.providers.gemini.apiKey, groq: !!s.providers.groq.apiKey, ollama: !!s.providers.ollama.model },
       geoapify: !!s.geoapify.apiKey,
+      explee: !!s.explee.apiKey,
       leadCount: L.stats().total,
     };
     return json(res, 200, health);
@@ -360,6 +403,83 @@ async function api(req, res, url) {
     const job = startJob({ urls, opts: { industry: str(b.industry, 80), location: str(b.location, 80), product: str(b.product, 60) } }, ({ urls: u, opts }, progress, ctl) => leadsFromUrls(u, opts, progress, ctl));
     return json(res, 200, { jobId: job.id });
   }
+
+  /* Explee discovery: free-zone searches only, deduped against this CRM. */
+  if (p === '/api/explee/status' && m === 'GET') {
+    return json(res, 200, await explee.status());
+  }
+  if (p === '/api/explee/filters' && m === 'POST') {
+    const b = await readJson(req, 5000);
+    try { return json(res, 200, await explee.nlToFilters(str(b.query, 1000))); }
+    catch (e) { return expleeFailure(res, e); }
+  }
+  if (p === '/api/explee/discover' && m === 'POST') {
+    const b = await readJson(req, 20_000);
+    const kind = b.kind === 'companies' ? 'companies' : 'people';
+    const params = {
+      limit: Math.min(Math.max(Math.trunc(+b.limit) || 20, 1), 100),
+      maxPages: Math.min(Math.max(Math.trunc(+b.maxPages) || 3, 1), 5),
+      countries: isoCountries(b.countries ?? b.country ?? getSettings().explee.defaultCountries),
+      minRelevance: Number.isFinite(Number(b.minRelevance)) ? Math.min(Math.max(Number(b.minRelevance), 0), 1) : undefined,
+      product: str(b.product, 60),
+      existing: L.listLeads(),
+    };
+    try {
+      const out = kind === 'companies'
+        ? await discoverCompanies(explee, { ...params, definition: str(b.definition, 300) })
+        : await discoverPeople(explee, {
+          ...params,
+          jobTitles: b.jobTitles,
+          companyDefinition: str(b.definition || b.companyDefinition, 300),
+        });
+      if (!b.save) return json(res, 200, { kind, items: out.items, stats: out.stats, cursor: out.cursor, saved: 0 });
+      const saved = saveDiscovered(explee, out.items, { product: params.product, cursor: out.cursor });
+      return json(res, 200, {
+        kind,
+        items: out.items,
+        stats: out.stats,
+        saved: saved.created,
+        duplicatesAtSave: saved.duplicates,
+        huntJobId: b.hunt === false ? null : huntMissingContacts(saved.leads),
+      });
+    } catch (e) { return expleeFailure(res, e); }
+  }
+  if (p === '/api/explee/save' && m === 'POST') {
+    const b = await readJson(req, 500_000);
+    const items = (Array.isArray(b.items) ? b.items : []).slice(0, 100);
+    if (!items.length) return json(res, 400, { error: 'There are no leads to save' });
+    const cursor = b.cursor && typeof b.cursor.key === 'string' ? { key: b.cursor.key.slice(0, 300), page: Math.trunc(+b.cursor.page) || 1 } : undefined;
+    const saved = saveDiscovered(explee, items, { product: str(b.product, 60), cursor });
+    return json(res, 200, { saved: saved.created, duplicates: saved.duplicates, leads: saved.leads, huntJobId: b.hunt === false ? null : huntMissingContacts(saved.leads) });
+  }
+  if (p === '/api/explee/enrich' && m === 'POST') {
+    const b = await readJson(req, 5000);
+    const known = b.leadId ? L.getLead(str(b.leadId, 40)) : null;
+    if (known?.emails?.length && !b.force) return json(res, 200, { email: known.emails[0], skipped: true, reason: 'Lead already has an email — nothing was charged.', estimated_cost: 0 });
+    try {
+      const out = await explee.enrichEmail({
+        firstName: b.firstName,
+        lastName: b.lastName,
+        companyDomain: b.companyDomain,
+        preset: b.preset,
+      });
+      return json(res, 200, out);
+    } catch (e) { return expleeFailure(res, e); }
+  }
+  if (p === '/api/explee/enrich-phone' && m === 'POST') {
+    const b = await readJson(req, 5000);
+    const known = b.leadId ? L.getLead(str(b.leadId, 40)) : null;
+    if (known?.phones?.length && !b.force) return json(res, 200, { phone: known.phones[0], skipped: true, reason: 'Lead already has a phone — nothing was charged.', estimated_cost: 0 });
+    try {
+      const out = await explee.enrichPhone({
+        linkedinUrl: b.linkedinUrl,
+        email: b.email,
+        preset: b.preset,
+      });
+      return json(res, 200, out);
+    } catch (e) { return expleeFailure(res, e); }
+  }
+
   const jobM = p.match(/^\/api\/jobs\/(\w+)(\/cancel)?$/);
   if (jobM) {
     const job = jobs.get(jobM[1]);

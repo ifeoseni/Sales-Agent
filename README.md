@@ -15,7 +15,8 @@ An AI sales assistant, lead finder and small-team CRM for Code Tech Consulting L
 - **Gives every lead a workspace.** Overview, Activity, Tasks and Message tabs plus one-click duplicate merge. You can edit contact details, value, priority, owner, tags and offer without leaving the lead.
 - **Works the list at speed.** Search, filter by stage/contact/priority/tag, sort, paginate, select many leads and bulk-change stage, priority, owner, tags or tasks. Import and export CSV.
 - **Sells for you.** A chat agent that knows your products and services (Event Owner App (EventOS), GameCenter, HRSolutionEventos, Goal Buddy and IT consulting), recommends the right one, and saves visitors' contact details as leads. One agent on your **website widget**, **Telegram** and the dashboard. Admins get a Telegram alert the moment a visitor leaves a number.
-- **Finds direct customers.** Four routes: paste a list of websites (always works), OpenStreetMap business listings, optionally **Geoapify places** (free plan: 3,000 credits/day, no card, attribution required), and web search. It reads each business's own public website (3 pages, robots.txt honoured) for emails, phones and social links, and filters out results that are about the wrong thing or the wrong place. Map places with no published email or phone are still saved (tagged **needs contact**) rather than discarded, so the first search is never empty for no visible reason.
+- **Finds direct customers.** Five routes: **Explee's global people/company search**, paste a list of websites (always works), OpenStreetMap business listings, optionally **Geoapify places** (free plan: 3,000 credits/day, no card, attribution required), and web search. It reads each business's own public website (3 pages, robots.txt honoured) for emails, phones and social links, and filters out results that are about the wrong thing or the wrong place. Map places with no published email or phone are still saved (tagged **needs contact**) rather than discarded, so the first search is never empty for no visible reason.
+- **Spends Explee credits like a five-year budget.** A hard **$30 lifetime ceiling** (3,000 credits), paced across **60 months** (~50 credits/month), with a balance floor and a persisted free-zone ledger. Searching is free; only per-lead email/phone enrichment costs credits, and only when a contact is found. Explee **never sends outreach** — you review and send yourself. Operator guide: [docs/explee-user-guide.md](docs/explee-user-guide.md).
 - **Writes the first message** (email, WhatsApp or DM) with one-click open links. **You review and send**: no auto-spam, no WhatsApp fees.
 - **Switch AI engines any time:** Google Gemini, Groq or Ollama, with automatic failover and retry on free-tier limits.
 
@@ -26,10 +27,10 @@ The interface has a light/dark theme, a responsive sidebar, `Ctrl+K` quick actio
 ```bash
 node server.js          # or double-click start.bat
 ```
-Open http://localhost:3000. The one-time password is printed on first run. Then **Settings → add a free Gemini/Groq key → Test**, check **Products**, try **Sales chat**. Optional: add a free Geoapify key in **Settings → Geoapify places** for the extra place search (see [USER_GUIDE.md](USER_GUIDE.md) §2b).
+Open http://localhost:3000. **New here? Follow the "Get started" checklist at the top of Today, or open the Guide tab (the ? button, top right).** It ticks each step off as you do it. The one-time password is printed on first run. Then **Settings → add a free Gemini/Groq key → Test**, check **Products**, try **Sales chat**. Optional: add a free Geoapify key in **Settings → Geoapify places** for the extra place search (see [USER_GUIDE.md](USER_GUIDE.md) §2b). For Explee, put the key in `.env` (`EXPLEE_API_KEY`) and read [docs/explee-user-guide.md](docs/explee-user-guide.md) before the first paid lookup.
 
 ```bash
-npm test                # 57 tests
+npm test                # full test suite
 npm run backup          # copy data/ to backups/
 npm run reset-password  # lost the password
 ```
@@ -49,6 +50,8 @@ lib/agent.js           sales persona, conversation memory (90-day retention), ou
 lib/llm.js             Gemini / Groq / Ollama with retry + failover
 lib/leadfinder.js      OpenStreetMap, web search, SearXNG, relevance filter, paste-a-list
 lib/geoapify.js        optional Geoapify place search (free plan; OpenStreetMap data)
+lib/explee.js          Explee client: free-zone ledger, lifetime budget/pace guard, enrichment
+lib/explee-discovery.js  Explee multi-country search, local dedupe, CRM lead mapping
 lib/scraper.js         contact extraction, robots.txt
 lib/net.js             SSRF guard + URL sanitising
 lib/leads.js           validated CRM store: stages, tasks, activity, dashboard, bulk, merge, CSV
@@ -70,6 +73,7 @@ There is no separate database server to install. `lib/store.js` is a small file-
 | `products.json` | The offer catalog the agent recommends |
 | `seed.json` | Which starter catalog version has been applied, so upgrades add new offers once |
 | `settings.json` | Password hash, session secret, AI keys, CRM preferences and widget settings |
+| `explee-state.json` | Free-zone counters, lifetime credit ledger, budget start date and the Explee no-repeat memory |
 
 Limits and care: one running instance per data folder (writes are not multi-process safe), a 100 MB cap per file, and thousands of leads rather than millions. Run `npm run backup` to copy the folder to `backups/` (keeps the newest 14); `settings.json` contains API keys, so keep backups private. On Docker, the named volume `agent-data` is mounted at `/data` and `DATA_DIR=/data`, so rebuilding the container does not lose records.
 
@@ -86,12 +90,15 @@ Only business contact details that organisations publish themselves, or that you
 
 **Geoapify (optional).** The free plan gives 3,000 credits/day at up to 5 requests/second, with no card, and permits commercial use within the plan. Attribution is mandatory on the free plan, so the dashboard shows **© OpenStreetMap contributors** and **Powered by Geoapify**; leave that visible. Geoapify's Places docs explicitly allow caching/storing results with no limits. Geoapify's terms and free-tier limits can change, so check the current [terms](https://www.geoapify.com/terms-and-conditions/) and [pricing](https://www.geoapify.com/pricing/) before relying on it. Lead data comes from OpenStreetMap (ODbL). This is practical guidance, not legal advice.
 
+**Explee (optional).** Explee supplies business people and company records. This integration is **discovery-only**: it does not start campaigns or send messages. Credits are spent only when you explicitly request a work email or phone number for one lead, and only if a contact is found. The budget is a hard **3,000-credit ($30) lifetime ceiling paced over 60 months**; see the [operator guide](docs/explee-user-guide.md) and the [technical reference](docs/explee-integration.md). Treat the data as business contact data, honour opt-outs, and follow NDPA/GDPR as applicable.
+
 ## Known limits (honest list)
 
 - Free public search engines throttle automated searches; the agent detects and explains this. Paste-a-list and OpenStreetMap are unaffected, and your own SearXNG makes web search dependable.
 - OpenStreetMap and Geoapify coverage in parts of Nigeria is thin.
 - Local Ollama is slow without a GPU; use Gemini or Groq for real chats.
 - Geoapify is optional and free within **3,000 credits/day** (a typical 15-lead search uses about 30). It only knows common business categories; when a keyword has no safe category, the search says so and suggests OpenStreetMap, web search, or a website list. Attribution is required.
+- Explee is optional and constrained by design: **10 free results per request**, 50 free requests/day and 10/minute, a positive balance is required even for free results, and paid enrichment is capped by a **$30 lifetime budget over five years**. It is lead generation only; no outreach is sent. Phone enrichment needs a LinkedIn URL on the lead, and email enrichment needs a person's first and last name plus a company domain.
 - One shared dashboard password (no per-user accounts). Leads have an optional **Owner** field so the team can say who is working a deal, but it is a label, not a login.
 - The CRM stores tasks and activity inside each lead, not in a separate database. JSON storage suits thousands of leads and their history, not millions. Run one instance per data folder.
 - Telegram and the Docker/cloud deployment recipes are written to each tool's documentation but were not run by the author (no bot token, Docker or cloud account available).

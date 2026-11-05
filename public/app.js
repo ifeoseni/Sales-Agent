@@ -1,3 +1,4 @@
+import { gettingStartedHtml, guideHtml } from './guide.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -44,7 +45,13 @@ async function api(path, method = 'GET', body, opts = {}) {
   });
   if (r.status === 401 && path !== '/login') { showLogin(); throw new Error('Please sign in'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'Request failed');
+  if (!r.ok) {
+    const err = new Error(j.error || 'Request failed');
+    err.code = j.code || '';
+    err.status = r.status;
+    err.retryAfter = j.retryAfter || null;
+    throw err;
+  }
   return j;
 }
 
@@ -155,6 +162,10 @@ const leadSearchText = (l) => JSON.stringify([
 const domainOf = (u) => {
   try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; }
 };
+const splitPersonName = (name) => {
+  const parts = String(name || '').trim().replace(/^(mr|mrs|ms|miss|dr|prof|sir|engr)\.?\s+/i, '').split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? { first: parts[0], last: parts.slice(1).join(' ') } : { first: parts[0] || '', last: '' };
+};
 const splitTags = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
 const activityIcon = (type) => ({
   created: 'i-spark', status: 'i-trend', note: 'i-chat', contact: 'i-phone', task: 'i-check',
@@ -212,6 +223,7 @@ async function boot() {
   fillSettings();
   renderProducts();
   suggestQueries();
+  fillExpleeProducts();
   renderSidebar();
   renderToday();
   renderLeads();
@@ -220,7 +232,7 @@ async function boot() {
   syncGeoSource();
   if (!$('#chatlog').children.length) addMsg('bot', 'Hi! Ask me about our software, or pretend to be a customer to test me.');
   const hash = location.hash.replace('#', '');
-  if (['today', 'pipeline', 'leads', 'finder', 'chat', 'products', 'settings'].includes(hash)) selectTab(hash);
+  if (['today', 'pipeline', 'leads', 'finder', 'chat', 'products', 'guide', 'settings'].includes(hash)) selectTab(hash);
 }
 
 /* ---------- navigation ---------- */
@@ -231,6 +243,7 @@ const PAGE_TITLES = {
   finder: ['Prospecting', 'Find leads'],
   chat: ['Conversation preview', 'Sales chat'],
   products: ['Offer catalog', 'Products'],
+  guide: ['Help', 'Guide'],
   settings: ['Workspace', 'Settings'],
 };
 function selectTab(target, focus = false) {
@@ -252,7 +265,8 @@ function selectTab(target, focus = false) {
   if (key === 'pipeline') renderPipeline();
   if (key === 'leads') renderLeads();
   if (key === 'settings') fillSettings();
-  if (key === 'finder') $('#fq').focus();
+  if (key === 'guide') renderGuidePage();
+  if (key === 'finder') { $('#fq').focus(); loadExpleeStatus({ quiet: true }); }
   if (key === 'chat') $('#chatIn').focus();
 }
 $('#tabs').addEventListener('click', (e) => {
@@ -356,6 +370,31 @@ function activityMarkup(a) {
     <span class="activity-body"><p><strong>${esc(a.leadName || 'Lead')}</strong> · ${esc(a.text)}</p><span class="activity-time">${esc(relative(a.at))} · ${esc(stageLabel(a.leadStatus))}</span></span>
   </button>`;
 }
+/* ---------- first-run guide ---------- */
+const GUIDE_KEY = 'ct-guide-hidden';
+function guideDismissed() {
+  try { return localStorage.getItem(GUIDE_KEY) === '1'; } catch { return false; }
+}
+function renderGuidePage() {
+  $('#guideContent').innerHTML = guideHtml({ leads, products, settings }, { budget: expleeStatus?.budget });
+  if (!expleeStatus) loadExpleeStatus({ quiet: true }).then(() => { if (currentTab === 'guide') $('#guideContent').innerHTML = guideHtml({ leads, products, settings }, { budget: expleeStatus?.budget }); });
+}
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-guide-go]');
+  if (go) { selectTab(go.dataset.guideGo); return; }
+  if (e.target.closest('#guideRestart')) {
+    try { localStorage.removeItem(GUIDE_KEY); } catch { /* storage blocked */ }
+    toast('The checklist is back on Today.');
+    return;
+  }
+  if (e.target.closest('#guideDismiss')) {
+    try { localStorage.setItem(GUIDE_KEY, '1'); } catch { /* storage blocked */ }
+    renderToday();
+    toast('Hidden. The Guide tab keeps the checklist.');
+  }
+});
+$('#helpBtn')?.addEventListener('click', () => selectTab('guide'));
+
 function renderToday() {
   if (!dash) {
     $('#todayContent').innerHTML = '<div class="panel"><div class="empty-state"><strong>Loading your desk…</strong><span>One moment while we bring the numbers together.</span></div></div>';
@@ -405,7 +444,7 @@ function renderToday() {
       <i class="won" style="height:${Math.max(w.won ? 3 : 0, (w.won / weeklyMax) * 100)}%"></i>
     </span>`).join('');
 
-  $('#todayContent').innerHTML = `
+  $('#todayContent').innerHTML = gettingStartedHtml({ leads, products, settings }, { dismissed: guideDismissed() }) + `
     <section class="today-hero">
       <div class="hero-copy">
         <div class="eyebrow">${greeting}, team · ${esc(today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }))}</div>
@@ -932,6 +971,244 @@ function renderFinderResults() {
   $('#fresults').innerHTML = `<div class="panel">${foundLeads.length ? leadTable(foundLeads, { bulk: false }) : '<div class="empty-state"><strong>No new leads found</strong><span>Try different words or a nearby area, or paste a list of websites for the most reliable results.</span></div>'}</div>`;
 }
 
+/* ---------- explee prospecting ---------- */
+let expleeStatus = null;
+let exCursor = null;
+let exMode = 'people';
+let exItems = [];
+let exSelected = new Set();
+let exBusy = false;
+
+const crFmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const usdOfCredits = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+
+function exHint(e) {
+  return {
+    paid_disabled: 'Paid lookups are off. Set a lifetime budget above 0 in Settings → Explee.',
+    lifetime_cap: 'The lifetime ceiling has been reached. Free searching still works.',
+    pace_limit: 'The five-year pace has not unlocked that much yet. Save credits for the contact that matters.',
+    balance_floor: 'The account is at the safety floor. Top up before spending more.',
+    free_zone_day: 'The daily free-search allowance is used up. It resets tomorrow.',
+    free_zone_minute: 'Too many searches in one minute. Wait a minute and retry.',
+    rate_limited: 'Explee is rate limiting. Wait a moment and retry.',
+    not_configured: 'Add an Explee API key in .env (EXPLEE_API_KEY).',
+  }[e?.code] || '';
+}
+
+function fillExpleeProducts() {
+  const sel = $('#exProduct');
+  if (!sel) return;
+  const value = sel.value;
+  sel.innerHTML = '<option value="">No offer</option>' + products
+    .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  if ([...sel.options].some((o) => o.value === value)) sel.value = value;
+}
+
+async function loadExpleeStatus({ quiet = false } = {}) {
+  try {
+    expleeStatus = await api('/explee/status');
+    renderExpleeStatus();
+  } catch (e) {
+    if (!quiet) toast(e.message, 'error');
+    const plan = $('#exPlan');
+    if (plan) { plan.textContent = 'Status unavailable'; plan.className = 'explee-badge off'; }
+  }
+}
+
+function renderExpleeStatus() {
+  const st = expleeStatus;
+  if (!st) return;
+  const b = st.budget || {};
+  const fz = st.freeZone || {};
+  const total = Number(b.total) || 0;
+  const used = Number(b.used) || 0;
+  const pct = total ? Math.min(100, (used / total) * 100) : 0;
+
+  const planName = typeof st.plan === 'string' ? st.plan : st.plan?.name || st.plan?.title || '';
+  const plan = $('#exPlan');
+  plan.textContent = st.configured ? (planName ? `${planName} plan` : 'Connected') : 'No API key';
+  plan.className = 'explee-badge ' + (st.configured ? 'on' : 'off');
+
+  $('#exAvailable').textContent = st.paidEnabled ? crFmt(b.availableNow) : 'Off';
+  $('#exAvailableSub').textContent = st.paidEnabled
+    ? `pace unlocks ${crFmt(b.monthlyPace)}/month`
+    : 'set a budget to enable paid lookups';
+  $('#exBalance').textContent = st.balance == null ? '—' : crFmt(st.balance);
+  $('#exBalanceSub').textContent = st.balance == null ? 'balance unavailable' : `${usdOfCredits(st.balance)} on the account`;
+  $('#exUsed').textContent = `${crFmt(used)} / ${crFmt(total)}`;
+  $('#exUsedSub').textContent = total ? `${crFmt(b.remaining)} credits left for life` : 'no lifetime budget set';
+  $('#exFree').textContent = `${fz.usedToday ?? 0} / ${fz.limitToday ?? 50}`;
+  $('#exFreeSub').textContent = `${fz.usedThisMinute ?? 0} of ${fz.limitMinute ?? 10} this minute`;
+
+  $('#exBudgetLabel').textContent = total
+    ? `${Math.round(pct)}% used · ${usdOfCredits(used)} of ${usdOfCredits(total)}`
+    : 'No budget set';
+  $('#exBar').style.width = `${pct}%`;
+  $('#exBarWrap').setAttribute('aria-valuenow', String(Math.round(pct)));
+  $('#exBarWrap').classList.toggle('warn', pct >= 75);
+  $('#exBarWrap').classList.toggle('danger', pct >= 95);
+
+  $('#exBudgetFoot').textContent = !st.paidEnabled
+    ? 'Paid lookups are disabled. Free searching and saving still work.'
+    : b.paceEnabled
+      ? `${crFmt(b.availableNow)} credits available now · about ${crFmt(b.monthlyPace)}/month over ${b.months} months${b.runwayMonths != null ? ` · ${crFmt(b.runwayMonths)} months of runway` : ''}`
+      : 'Pace guard off · the lifetime ceiling is still enforced';
+  if (st.warning) $('#exBudgetFoot').textContent += ` · ${st.warning}`;
+
+  const saved = st.saved || {};
+  $('#exSavedCount').textContent = `Already saved: ${(saved.people || 0) + (saved.companies || 0)}`;
+}
+
+function setExMode(mode) {
+  exMode = mode === 'companies' ? 'companies' : 'people';
+  for (const b of $$('[data-exmode]')) b.classList.toggle('active', b.dataset.exmode === exMode);
+  $('#exTitlesWrap').hidden = exMode === 'companies';
+}
+
+function setExBusy(busy) {
+  exBusy = busy;
+  $('#exPreview').disabled = busy;
+  $('#exRefresh').disabled = busy;
+  $('#exPreview').classList.toggle('loading', busy);
+  updateExSave();
+}
+
+function expleeParams() {
+  const definition = $('#exDef').value.trim();
+  if (!definition) { $('#exDef').focus(); toast('Describe the companies you want', 'error'); return null; }
+  const jobTitles = exMode === 'people' ? $('#exTitles').value.trim() : '';
+  if (exMode === 'people' && !jobTitles) {
+    $('#exTitles').focus();
+    toast('Add at least one job title for People mode', 'error');
+    return null;
+  }
+  return {
+    kind: exMode,
+    definition,
+    jobTitles,
+    countries: $('#exCountries').value.trim(),
+    limit: +$('#exLimit').value || 20,
+    product: $('#exProduct').value,
+  };
+}
+
+function updateExSave() {
+  const n = exSelected.size;
+  const btn = $('#exSave');
+  if (!btn) return;
+  btn.textContent = n ? `Save ${n} to CRM` : 'Save all to CRM';
+  btn.disabled = exBusy || n === 0;
+}
+
+async function previewExplee() {
+  const params = expleeParams();
+  if (!params) return;
+  setExBusy(true);
+  $('#exResults').innerHTML = '';
+  $('#exProgress').textContent = 'Searching Explee’s free zone…';
+  try {
+    const out = await api('/explee/discover', 'POST', { ...params, save: false });
+    exItems = Array.isArray(out.items) ? out.items : [];
+    exCursor = out.cursor || null;
+    exSelected = new Set(exItems.map((_, i) => i));
+    renderExpleeResults(out.stats || {});
+    loadExpleeStatus({ quiet: true });
+  } catch (e) {
+    exItems = []; exSelected = new Set();
+    const hint = exHint(e);
+    $('#exProgress').innerHTML = `<span class="err">${esc(e.message)}</span>${hint ? `<br><span class="muted">${esc(hint)}</span>` : ''}`;
+    $('#exResults').innerHTML = '';
+  } finally {
+    setExBusy(false);
+  }
+}
+
+function renderExpleeResults(stats = {}) {
+  const summary = `Fetched ${stats.fetched || 0} in ${stats.pages || 0} free request${stats.pages === 1 ? '' : 's'} · <strong>${stats.new || 0} new</strong> · ${stats.duplicates || 0} already known · ${stats.skipped || 0} incomplete`;
+  if (!exItems.length) {
+    $('#exProgress').innerHTML = summary;
+    $('#exResults').innerHTML = `<div class="panel"><div class="empty-state"><strong>No new ${esc(exMode)} matched</strong><span>Everything Explee returned is already in this CRM, or the definition was too narrow. Try different words, another country, or fewer job titles.</span></div></div>`;
+    updateExSave();
+    return;
+  }
+  $('#exProgress').innerHTML = `${summary} <span class="muted">Nothing is saved yet — review the list, then save.</span>`;
+  const rows = exItems.map((item, i) => {
+    const l = item.lead || {};
+    const li = l.socials?.linkedin;
+    const company = l.companyDomain || (l.website ? domainOf(l.website) : '');
+    return `<tr>
+      <td class="cell-check"><input type="checkbox" data-exsel="${i}" ${exSelected.has(i) ? 'checked' : ''} aria-label="Select ${esc(l.name)}"></td>
+      <td class="row-business"><div class="lead-title-row">${brandAvatar(l)}<div><strong>${esc(l.name)}</strong><div class="cell-muted small">${esc(l.jobTitle || l.industry || '')}</div></div></div></td>
+      <td class="row-contact">${company ? `<span class="explee-company">${esc(company)}</span>` : '<span class="faint">—</span>'}</td>
+      <td class="row-value"><span class="small">${esc(l.location || '—')}</span></td>
+      <td class="row-actions-cell">${li ? `<a class="icon-btn" href="${safeHref(li)}" target="_blank" rel="noopener" title="Open LinkedIn profile" aria-label="Open LinkedIn profile"><svg class="ico"><use href="#i-globe"/></svg></a>` : '<span class="faint small">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  $('#exResults').innerHTML = `<div class="panel explee-results">
+    <div class="panel-head"><div><h3>Preview · ${exItems.length} new ${esc(exMode)}</h3><p class="muted small">Nothing is in the CRM until you save. Uncheck anyone you do not want.</p></div><span class="chip gold">Free zone</span></div>
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th class="cell-check"><input type="checkbox" id="exSelectAll" checked aria-label="Select all preview leads"></th><th>Lead</th><th>Company</th><th>Location</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+  updateExSave();
+}
+
+async function saveExplee() {
+  const chosen = [...exSelected].sort((a, b) => a - b).map((i) => exItems[i]).filter(Boolean);
+  if (!chosen.length) return;
+  setExBusy(true);
+  try {
+    const out = await api('/explee/save', 'POST', { items: chosen, product: $('#exProduct').value, cursor: exCursor });
+    await refreshAll();
+    if (out.huntJobId) toast('Contact agent is looking for emails and phones the free way…');
+    toast(`${out.saved} lead${out.saved === 1 ? '' : 's'} saved${out.duplicates ? ` · ${out.duplicates} duplicate${out.duplicates === 1 ? '' : 's'} skipped` : ''}`, out.saved ? '' : 'error');
+    $('#exResults').innerHTML = `<div class="panel"><div class="empty-state"><strong>Saved to the CRM</strong><span>${out.saved} lead${out.saved === 1 ? '' : 's'} added. Open <strong>Leads</strong> to work them — saved people will not appear in a search again.</span></div></div>`;
+    $('#exProgress').innerHTML = '';
+    exItems = []; exSelected = new Set();
+    loadExpleeStatus({ quiet: true });
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    setExBusy(false);
+  }
+}
+
+$('#exRefresh').addEventListener('click', () => loadExpleeStatus());
+$('#exPreview').addEventListener('click', previewExplee);
+$('#exSave').addEventListener('click', saveExplee);
+$('#exDef').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); previewExplee(); } });
+for (const b of $$('[data-exmode]')) b.addEventListener('click', () => setExMode(b.dataset.exmode));
+$('#exPresets').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-countries]');
+  if (!b) return;
+  $('#exCountries').value = b.dataset.countries;
+  for (const x of $$('.explee-preset', $('#exPresets'))) x.classList.toggle('is-on', x === b);
+});
+$('#exCountries').addEventListener('input', () => {
+  const v = $('#exCountries').value.trim();
+  for (const x of $$('.explee-preset', $('#exPresets'))) x.classList.toggle('is-on', x.dataset.countries === v);
+});
+$('#exResults').addEventListener('change', (e) => {
+  if (e.target.id === 'exSelectAll') {
+    const on = e.target.checked;
+    exSelected = on ? new Set(exItems.map((_, i) => i)) : new Set();
+    for (const cb of $$('[data-exsel]', $('#exResults'))) cb.checked = on;
+    updateExSave();
+    return;
+  }
+  const cb = e.target.closest('[data-exsel]');
+  if (!cb) return;
+  const i = +cb.dataset.exsel;
+  if (cb.checked) exSelected.add(i); else exSelected.delete(i);
+  const all = $('#exSelectAll');
+  if (all) {
+    all.checked = exSelected.size === exItems.length;
+    all.indeterminate = exSelected.size > 0 && exSelected.size < exItems.length;
+  }
+  updateExSave();
+});
+
 /* ---------- drawer / lead workspace ---------- */
 const dlg = $('#dlg');
 const mergeDlg = $('#mergeDlg');
@@ -993,6 +1270,29 @@ function overviewPane(lead) {
   const socials = Object.entries(lead.socials || {}).map(([k, v]) => `<a href="${safeHref(v)}" target="_blank" rel="noopener noreferrer"><svg class="ico"><use href="#i-globe"/></svg> ${esc(k)}</a>`).join('');
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.name + ' ' + (lead.address || lead.location || ''))}`;
   const srcUrl = lead.sourceUrl || (lead.address ? mapUrl : `https://www.google.com/search?q=${encodeURIComponent(lead.name + ' ' + (lead.location || ''))}`);
+  const personName = splitPersonName(lead.name);
+  const enrichDomain = lead.companyDomain || domainOf(lead.website);
+  const linkedin = lead.socials?.linkedin || '';
+  // Company pages and company-name leads must not be treated as a person.
+  const personish = !!lead.jobTitle || /linkedin\.com\/in\//i.test(linkedin);
+  const canEmail = personish && !!(personName.first && personName.last && enrichDomain);
+  const canPhone = personish && !!linkedin;
+  const expleeCard = personish ? `
+    <div class="explee-enrich">
+      <div class="explee-enrich-head">
+        <div>
+          <strong><svg class="ico"><use href="#i-spark"/></svg> Explee enrichment</strong>
+          <p class="muted small">Verified contact lookup against the $30 lifetime budget. You are charged only when something is found.</p>
+        </div>
+        <label class="check small" title="Premium matching costs more but reaches harder contacts"><input type="checkbox" id="dexPremium"> Premium <span class="muted">(5 / 30 cr)</span></label>
+      </div>
+      <div class="explee-enrich-actions">
+        <button class="btn ghost sm" id="dexEmail" ${canEmail ? '' : 'disabled'} title="${canEmail ? 'Find a verified work email' : 'Needs a first name, last name and company domain'}"><svg class="ico"><use href="#i-mail"/></svg> Find work email · <span id="dexEmailCost">1.5</span> cr</button>
+        <button class="btn ghost sm" id="dexPhone" ${canPhone ? '' : 'disabled'} title="${canPhone ? 'Find a phone number from the LinkedIn profile' : 'Needs a LinkedIn profile on this lead'}"><svg class="ico"><use href="#i-phone"/></svg> Find phone · <span id="dexPhoneCost">15</span> cr</button>
+        ${canEmail ? '' : '<span class="fineprint">Email lookup needs a first and last name plus a company domain or website.</span>'}
+        ${canPhone ? '' : '<span class="fineprint">Phone lookup needs a LinkedIn profile on the lead.</span>'}
+      </div>
+    </div>` : '';
   const eh = lead.emailHealth;
   const ehBadge = eh ? (eh.status === 'verified'
     ? `<span class="mx-pill verified" title="Mail server verified: ${esc(eh.primaryMx || '')}">✓ ${esc(eh.provider || 'MX OK')}</span>`
@@ -1024,6 +1324,7 @@ function overviewPane(lead) {
       <a href="${safeHref(srcUrl)}" target="_blank" rel="noopener noreferrer" class="muted" title="View online source / search on Google"><svg class="ico"><use href="#i-search"/></svg> Source on Google</a>
       ${!lead.emails?.length && !lead.phones?.length ? '<span class="muted">No direct email or phone on file yet. Click "Find contacts online" below.</span>' : ''}
     </div>
+    ${expleeCard}
     ${techChips}
     ${icebreakerCard}
     <div class="field-grid" style="margin-top:16px">
@@ -1113,6 +1414,71 @@ function messagePane(lead) {
     </div>
   </div>`;
 }
+async function enrichExpleeEmail(id) {
+  const lead = leadById(id);
+  if (!lead) return;
+  const { first, last } = splitPersonName(lead.name);
+  const domain = lead.companyDomain || domainOf(lead.website);
+  const preset = $('#dexPremium')?.checked ? 'premium' : 'basic';
+  const btn = $('#dexEmail');
+  if (btn) btn.disabled = true;
+  try {
+    toast(`Asking Explee for a work email (${preset === 'premium' ? '5' : '1.5'} credits if found)…`);
+    const r = await api('/explee/enrich', 'POST', { leadId: id, firstName: first, lastName: last, companyDomain: domain, preset });
+    if (!r.email) {
+      toast('No work email found — nothing was charged.', 'error');
+    } else {
+      const emails = [...new Set([...(lead.emails || []), r.email])];
+      const updated = await api(`/leads/${id}`, 'PATCH', { emails });
+      applyLead(updated);
+      renderDrawer();
+      renderLeads();
+      toast(`Work email found: ${r.email}`);
+    }
+    loadExpleeStatus({ quiet: true });
+  } catch (err) {
+    const hint = exHint(err);
+    toast(hint || err.message, 'error');
+  } finally {
+    const b = $('#dexEmail');
+    if (b) b.disabled = false;
+  }
+}
+
+async function enrichExpleePhone(id) {
+  const lead = leadById(id);
+  if (!lead || !lead.socials?.linkedin) return;
+  const preset = $('#dexPremium')?.checked ? 'premium' : 'basic_new';
+  const btn = $('#dexPhone');
+  if (btn) btn.disabled = true;
+  try {
+    toast(`Asking Explee for a phone number (${preset === 'premium' ? '30' : '15'} credits if found)…`);
+    const r = await api('/explee/enrich-phone', 'POST', {
+      leadId: id,
+      linkedinUrl: lead.socials.linkedin,
+      email: lead.emails?.[0] || '',
+      preset,
+    });
+    if (!r.phone) {
+      toast('No phone number found — nothing was charged.', 'error');
+    } else {
+      const phones = [...new Set([...(lead.phones || []), r.phone])];
+      const updated = await api(`/leads/${id}`, 'PATCH', { phones });
+      applyLead(updated);
+      renderDrawer();
+      renderLeads();
+      toast(`Phone found: ${r.phone}`);
+    }
+    loadExpleeStatus({ quiet: true });
+  } catch (err) {
+    const hint = exHint(err);
+    toast(hint || err.message, 'error');
+  } finally {
+    const b = $('#dexPhone');
+    if (b) b.disabled = false;
+  }
+}
+
 function bindDrawer() {
   const id = currentLeadId;
   const lead = leadById(id);
@@ -1123,6 +1489,13 @@ function bindDrawer() {
   on('[data-drawer-stage]', 'change', (e) => changeStage(id, e.target.value));
   on('#dsave', 'click', () => saveDrawer(id));
   on('#dhunt', 'click', () => huntLead(id));
+  on('#dexPremium', 'change', () => {
+    const premium = $('#dexPremium')?.checked;
+    if ($('#dexEmailCost')) $('#dexEmailCost').textContent = premium ? '5' : '1.5';
+    if ($('#dexPhoneCost')) $('#dexPhoneCost').textContent = premium ? '30' : '15';
+  });
+  on('#dexEmail', 'click', () => enrichExpleeEmail(id));
+  on('#dexPhone', 'click', () => enrichExpleePhone(id));
   on('#drefresh', 'click', () => enrichLead(id));
   on('#dcheckmx', 'click', async () => {
     const btn = $('#dcheckmx');
@@ -1560,7 +1933,7 @@ $('#psave').addEventListener('click', async (e) => {
   e.target.disabled = true;
   try {
     products = await api('/products', 'PUT', collectProducts());
-    renderProducts(); suggestQueries();
+    renderProducts(); suggestQueries(); fillExpleeProducts();
     toast('Products saved');
   } catch (err) { toast(err.message, 'error'); }
   e.target.disabled = false;
@@ -1590,6 +1963,20 @@ function fillSettings() {
   if ($('#tchannel')) $('#tchannel').value = s.telegram.channelId || '';
   $('#sxurl').value = s.search.searxngUrl;
   $('#geokey').value = s.geoapify?.apiKey || '';
+  const ex = s.explee || {};
+  if ($('#exbudget')) {
+    $('#exbudget').value = ex.lifetimeCreditBudget ?? 3000;
+    $('#exmonths').value = ex.budgetMonths ?? 60;
+    $('#exfloor').value = ex.balanceFloor ?? 100;
+    $('#exdefcountries').value = ex.defaultCountries || '';
+    $('#expace').checked = ex.paceEnabled !== false;
+    const locked = !!ex.budgetFromEnv;
+    $('#exbudget').disabled = locked;
+    $('#exmonths').disabled = locked;
+    $('#exenvnote').textContent = locked
+      ? 'The lifetime ceiling and duration are set by EXPLEE_LIFETIME_CREDIT_BUDGET / EXPLEE_BUDGET_MONTHS in .env, so those two fields are read-only here. Paid actions stop at the lifetime ceiling even if pacing is off.'
+      : 'Defaults are 3,000 credits ($30) over 60 months. Paid actions stop at the lifetime ceiling even if pacing is off.';
+  }
   if ($('#wh-enabled')) {
     $('#wh-enabled').checked = !!s.webhook?.enabled;
     $('#wh-url').value = s.webhook?.url || '';
@@ -1617,6 +2004,13 @@ function collectSettings() {
     telegram: { token: $('#ttoken').value, channelId: $('#tchannel')?.value?.trim() || '' },
     search: { searxngUrl: $('#sxurl').value.trim() },
     geoapify: { apiKey: $('#geokey').value.trim() },
+    explee: {
+      lifetimeCreditBudget: +$('#exbudget').value || 0,
+      budgetMonths: +$('#exmonths').value || 60,
+      balanceFloor: +$('#exfloor').value || 0,
+      paceEnabled: $('#expace').checked,
+      defaultCountries: $('#exdefcountries').value.trim(),
+    },
     webhook: {
       enabled: $('#wh-enabled') ? $('#wh-enabled').checked : false,
       url: $('#wh-url') ? $('#wh-url').value.trim() : '',
@@ -1703,6 +2097,7 @@ const COMMANDS = [
   { label: 'Find leads', detail: 'Prospect new businesses', tab: 'finder', icon: 'i-search' },
   { label: 'Sales chat', detail: 'Test the agent', tab: 'chat', icon: 'i-chat' },
   { label: 'Products', detail: 'Edit the offer catalog', tab: 'products', icon: 'i-box' },
+  { label: 'Guide', detail: 'How to use this app, step by step', tab: 'guide', icon: 'i-help' },
   { label: 'Settings', detail: 'AI, goals and widget', tab: 'settings', icon: 'i-sliders' },
   { label: 'Add a lead', detail: 'Create a new record', action: 'add', icon: 'i-plus' },
   { label: 'Export leads', detail: 'Download the CSV', action: 'export', icon: 'i-arrow' },

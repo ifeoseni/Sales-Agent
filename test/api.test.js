@@ -37,7 +37,7 @@ function startMock() {
 
 function startServer(env = {}) {
   return new Promise((resolve, reject) => {
-    proc = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, DATA_DIR: dataDir, PORT, HOST: '127.0.0.1', GEOAPIFY_API_KEY: '', ...env } });
+    proc = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, DATA_DIR: dataDir, PORT, HOST: '127.0.0.1', GEOAPIFY_API_KEY: '', TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHANNEL_ID: '', EXPLEE_API_KEY: '', GEMINI_API_KEY: '', GROQ_API_KEY: '', ...env } });
     let out = '';
     const timer = setTimeout(() => reject(new Error('server did not start: ' + out)), 10000);
     proc.stdout.on('data', (d) => {
