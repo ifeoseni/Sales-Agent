@@ -147,11 +147,13 @@ function huntMissingContacts(leads) {
   if (!need.length) return null;
   const job = startJob({ ids: need.map((l) => l.id) }, async ({ ids }, progress, ctl) => {
     const found = [];
+    progress(`Checking ${ids.length} lead${ids.length === 1 ? '' : 's'} for a public email or phone…`);
     for (const id of ids) {
       if (ctl.cancelled) break;
       try {
         const r = await enrichLeadOnline(id, { force: true });
         if (r.updated) found.push(r.lead);
+        else L.addActivity(id, { type: 'enrich', text: 'Contact agent checked the company website and web search: no public email or phone found. Try the paid Explee lookup or add one by hand.' });
         progress(`${L.getLead(id)?.name || id}: ${r.updated ? 'contacts found' : 'nothing public found'}`);
       } catch (e) { progress(`${id}: ${e.message}`); }
     }

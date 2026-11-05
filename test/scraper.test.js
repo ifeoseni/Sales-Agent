@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-scraper-')); // never touch the real data/ folder
-const { extractContacts, findEmails, findPhones, normPhone, classifySocial } = await import('../lib/scraper.js');
+const { extractContacts, findEmails, findPhones, normPhone, classifySocial, rankEmails, ccForHost } = await import('../lib/scraper.js');
 const { parseCsv } = await import('../lib/leads.js');
 
 test('normalises Nigerian phone numbers', () => {
@@ -50,4 +50,26 @@ test('classifySocial rejects share links and bare homepages', () => {
 
 test('csv parser handles quotes and commas', () => {
   assert.deepEqual(parseCsv('a,b\r\n"x, y","say ""hi"""\r\n'), [['a', 'b'], ['x, y', 'say "hi"']]);
+});
+
+test('phone numbers need a real country code and a length that country uses', () => {
+  assert.equal(normPhone('+0694877811'), null, 'country codes never start with 0');
+  assert.equal(normPhone('+52050734'), null, 'too short');
+  assert.equal(normPhone('+4444134'), null);
+  assert.equal(normPhone('+999 123 456 789'), null, 'no such calling code range');
+  assert.equal(normPhone('+31 85 401 7704'), '+31854017704');
+  assert.equal(normPhone('+31 85 401 77044'), null, 'Dutch numbers are 11 digits with the code');
+  assert.equal(normPhone('+1 415 555 2671'), '+14155552671');
+});
+
+test('a local number is read in the site country, not the default one', () => {
+  assert.equal(ccForHost('socialhippo.nl', '234'), '31');
+  assert.equal(ccForHost('acme.com', '234'), '234');
+  assert.equal(normPhone('085 401 7704', ccForHost('x.nl', '234')), '+31854017704');
+});
+
+test('the company\'s own inbox beats third-party addresses and role noise', () => {
+  const out = rankEmails(['staff@agency.co.uk', 'privacy@masjo.nl', 'mascha@masjo.nl', 'masjo.studio@gmail.com'], 'www.masjo.nl');
+  assert.deepEqual(out, ['mascha@masjo.nl', 'masjo.studio@gmail.com']);
+  assert.deepEqual(rankEmails(['partner@other.com'], 'acme.com'), ['partner@other.com'], 'last resort when nothing else exists');
 });

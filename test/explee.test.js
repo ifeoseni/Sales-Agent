@@ -468,3 +468,8 @@ test('concurrent paid calls cannot both slip past the budget', async () => {
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
   assert.equal(results.find((r) => r.status === 'rejected').reason.code, 'lifetime_cap');
 });
+
+test('junk phone fragments from Explee are dropped', () => {
+  const lead = companyToLead({ domain: 'a.com', name: 'A', phones: ['+4444134', '+31854444134', '12345'] });
+  assert.deepEqual(lead.phones, ['+31854444134']);
+});

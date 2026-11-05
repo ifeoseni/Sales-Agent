@@ -1104,6 +1104,8 @@ function updateExSave() {
   if (!btn) return;
   btn.textContent = n ? `Save ${n} to CRM` : 'Save all to CRM';
   btn.disabled = exBusy || n === 0;
+  const b2 = $('#exSave2');
+  if (b2) { b2.textContent = n ? `Save ${n} to CRM` : 'Select leads to save'; b2.disabled = exBusy || n === 0; }
 }
 
 async function previewExplee() {
@@ -1119,6 +1121,7 @@ async function previewExplee() {
     exSelected = new Set(exItems.map((_, i) => i));
     renderExpleeResults(out.stats || {});
     loadExpleeStatus({ quiet: true });
+    $('#exResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     exItems = []; exSelected = new Set();
     const hint = exHint(e);
@@ -1146,18 +1149,40 @@ function renderExpleeResults(stats = {}) {
       <td class="cell-check"><input type="checkbox" data-exsel="${i}" ${exSelected.has(i) ? 'checked' : ''} aria-label="Select ${esc(l.name)}"></td>
       <td class="row-business"><div class="lead-title-row">${brandAvatar(l)}<div><strong>${esc(l.name)}</strong><div class="cell-muted small">${esc(l.jobTitle || l.industry || '')}</div></div></div></td>
       <td class="row-contact">${company ? `<span class="explee-company">${esc(company)}</span>` : '<span class="faint">—</span>'}</td>
+      <td class="row-contact"><span class="small">${esc((l.emails || [])[0] || '')}${(l.emails || [])[0] && (l.phones || [])[0] ? '<br>' : ''}${esc((l.phones || [])[0] || '')}${!(l.emails || [])[0] && !(l.phones || [])[0] ? '<span class="faint">none yet</span>' : ''}</span></td>
       <td class="row-value"><span class="small">${esc(l.location || '—')}</span></td>
       <td class="row-actions-cell">${li ? `<a class="icon-btn" href="${safeHref(li)}" target="_blank" rel="noopener" title="Open LinkedIn profile" aria-label="Open LinkedIn profile"><svg class="ico"><use href="#i-globe"/></svg></a>` : '<span class="faint small">—</span>'}</td>
     </tr>`;
   }).join('');
   $('#exResults').innerHTML = `<div class="panel explee-results">
-    <div class="panel-head"><div><h3>Preview · ${exItems.length} new ${esc(exMode)}</h3><p class="muted small">Nothing is in the CRM until you save. Uncheck anyone you do not want.</p></div><span class="chip gold">Free zone</span></div>
+    <div class="panel-head"><div><h3>Preview · ${exItems.length} new ${esc(exMode)}</h3><p class="muted small">Nothing is in the CRM until you save. Uncheck anyone you do not want.</p></div><div class="panel-actions"><span class="chip gold">Free zone</span><button type="button" class="btn sm" id="exSave2">Save to CRM</button></div></div>
     <div class="table-wrap"><table class="tbl">
-      <thead><tr><th class="cell-check"><input type="checkbox" id="exSelectAll" checked aria-label="Select all preview leads"></th><th>Lead</th><th>Company</th><th>Location</th><th></th></tr></thead>
+      <thead><tr><th class="cell-check"><input type="checkbox" id="exSelectAll" checked aria-label="Select all preview leads"></th><th>Lead</th><th>Company</th><th>Email / phone</th><th>Location</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
   updateExSave();
+}
+
+/** Follows the free contact agent after a save, so the user sees what it found. */
+async function watchHunt(jobId) {
+  const box = $('#exProgress');
+  try {
+    for (;;) {
+      const j = await api('/jobs/' + jobId);
+      const lines = j.progress || [];
+      const found = lines.filter((x) => x.endsWith('contacts found')).length;
+      const none = lines.filter((x) => x.endsWith('nothing public found')).length;
+      box.innerHTML = `<strong>Contact agent</strong> (free): ${esc(lines[0] || 'Starting…')}<br>${found} found · ${none} nothing public so far${j.status === 'running' ? ' …' : ''}`;
+      if (j.status !== 'running') {
+        await refreshAll();
+        box.innerHTML = `<strong>Contact agent finished.</strong> Contacts found for ${found} lead${found === 1 ? '' : 's'}; ${none} had nothing public. Open a lead and check its Activity tab for details.${none ? ' For the leads that matter, use the paid Explee email or phone button.' : ''}`;
+        toast(`Contact agent: ${found} found, ${none} nothing public`, found ? '' : 'error');
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  } catch (e) { box.innerHTML = `<span class="err">Could not follow the contact agent: ${esc(e.message)}</span>`; }
 }
 
 async function saveExplee() {
@@ -1167,11 +1192,11 @@ async function saveExplee() {
   try {
     const out = await api('/explee/save', 'POST', { items: chosen, product: $('#exProduct').value, cursor: exCursor });
     await refreshAll();
-    if (out.huntJobId) toast('Contact agent is looking for emails and phones the free way…');
     toast(`${out.saved} lead${out.saved === 1 ? '' : 's'} saved${out.duplicates ? ` · ${out.duplicates} duplicate${out.duplicates === 1 ? '' : 's'} skipped` : ''}`, out.saved ? '' : 'error');
     $('#exResults').innerHTML = `<div class="panel"><div class="empty-state"><strong>Saved to the CRM</strong><span>${out.saved} lead${out.saved === 1 ? '' : 's'} added. Open <strong>Leads</strong> to work them — saved people will not appear in a search again.</span></div></div>`;
     $('#exProgress').innerHTML = '';
     exItems = []; exSelected = new Set();
+    if (out.huntJobId) watchHunt(out.huntJobId);
     loadExpleeStatus({ quiet: true });
   } catch (e) {
     toast(e.message, 'error');
@@ -1183,6 +1208,7 @@ async function saveExplee() {
 $('#exRefresh').addEventListener('click', () => loadExpleeStatus());
 $('#exPreview').addEventListener('click', previewExplee);
 $('#exSave').addEventListener('click', saveExplee);
+document.addEventListener('click', (e) => { if (e.target.closest('#exSave2')) saveExplee(); });
 $('#exDef').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); previewExplee(); } });
 for (const b of $$('[data-exmode]')) b.addEventListener('click', () => setExMode(b.dataset.exmode));
 $('#exPresets').addEventListener('click', (e) => {
