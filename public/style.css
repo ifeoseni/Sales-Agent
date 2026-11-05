@@ -1300,3 +1300,6 @@ dialog::backdrop { background: rgba(9, 20, 13, .45); backdrop-filter: blur(2px);
 @media (max-width: 800px) { .guide-flow { grid-template-columns: 1fr; } .guide-cols { grid-template-columns: 1fr; } .guide-step { flex-wrap: wrap; } }
 
 .guide-slim { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 8px 12px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); font-size: 12.5px; }
+
+.finder-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+#expleePanel, #localFinder { scroll-margin-top: 90px; }

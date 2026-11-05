@@ -394,6 +394,12 @@ document.addEventListener('click', (e) => {
   }
 });
 $('#helpBtn')?.addEventListener('click', () => selectTab('guide'));
+document.addEventListener('click', (e) => {
+  const j = e.target.closest('[data-jump]');
+  if (!j) return;
+  e.preventDefault();
+  document.getElementById(j.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
 function renderToday() {
   if (!dash) {

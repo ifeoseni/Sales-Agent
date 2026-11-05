@@ -418,7 +418,8 @@ async function api(req, res, url) {
     const kind = b.kind === 'companies' ? 'companies' : 'people';
     const params = {
       limit: Math.min(Math.max(Math.trunc(+b.limit) || 20, 1), 100),
-      maxPages: Math.min(Math.max(Math.trunc(+b.maxPages) || 3, 1), 5),
+      // Each free request returns at most 10 and overlaps a little, so allow ~limit/10 + 2 requests (max 10). Asking for 50 leads uses about 7 of the 50 free daily requests; it never spends credits.
+      maxPages: Math.min(Math.max(Math.trunc(+b.maxPages) || Math.ceil(Math.min(Math.max(Math.trunc(+b.limit) || 20, 1), 100) / 10) + 2, 1), 10),
       countries: isoCountries(b.countries ?? b.country ?? getSettings().explee.defaultCountries),
       minRelevance: Number.isFinite(Number(b.minRelevance)) ? Math.min(Math.max(Number(b.minRelevance), 0), 1) : undefined,
       product: str(b.product, 60),
